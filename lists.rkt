@@ -1,4 +1,5 @@
 #lang plait
+(print-only-errors #t)
 
 (define (find-temperate temps)
   (cond
@@ -51,8 +52,8 @@
                      (cond
                        [(empty? vals) (list)]
                        [(cons? vals) (if (proc (first vals))
-                                         (cons (first vals) (filter vals proc))
-                                         (filter vals proc)
+                                         (filter (rest vals) proc)
+                                         (cons (first vals) (filter (rest vals) proc))
                                          )]))])
     (filter lop (lambda (val) (> val ua)))))
 
@@ -73,3 +74,5 @@
 (test (average-price '()) 0)
 
 (test (convertFC '(32 212 -40)) '(0 100 -40))
+
+(test (eliminate-exp 5 '(3 4 5 6 7 8)) '(3 4 5))
