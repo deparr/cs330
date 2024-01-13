@@ -64,10 +64,10 @@
   (letrec ([filter (lambda (vals proc)
                      (cond
                        [(empty? vals) (list)]
-                       [(cons? vals) (if (proc (first vals))
+                       [(cons? vals) (if (not (proc (first vals)))
                                          (filter (rest vals) proc)
                                          (cons (first vals) (filter (rest vals) proc)))]))])
-    (filter lop (lambda (val) (> val ua)))))
+    (filter lop (lambda (val) (<= val ua)))))
 
 (define (suffixes l)
   (cond
