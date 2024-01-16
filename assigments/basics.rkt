@@ -128,10 +128,10 @@
              [right-x (+ (position-x c) l)]
              [bot-y (+ (position-y c) l)])
 
-         (and (>= p-x left-x)
-              (<= p-x right-x)
-              (>= p-y top-y)
-              (<= p-y bot-y)))]
+         (and (> p-x left-x)
+              (< p-x right-x)
+              (> p-y top-y)
+              (< p-y bot-y)))]
 
       [(rectangle c w h)
        (let ([left-x (position-x c)]
@@ -139,10 +139,10 @@
              [right-x (+ (position-x c) w)]
              [bot-y (+ (position-y c) h)])
 
-         (and (>= p-x left-x)
-              (<= p-x right-x)
-              (>= p-y top-y)
-              (<= p-y bot-y)))])))
+         (and (> p-x left-x)
+              (< p-x right-x)
+              (> p-y top-y)
+              (< p-y bot-y)))])))
 
 (test (sum-coins 5 1 2 3) 105)
 (test (sum-coins 100 100 100 100) 4100)
