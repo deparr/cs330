@@ -3,10 +3,12 @@
 
 (define (find-temperate temps)
   (type-case (Listof 'a) temps
-    [empty (none)]
-    [(cons t restts) (if (and (<= t 95) (>= t 5))
-                         (some t)
-                         (find-temperate restts))]))
+    [empty
+      (none)]
+    [(cons t restts)
+     (if (and (<= t 95) (>= t 5))
+       (some t)
+       (find-temperate restts))]))
 
 (define (check-temperate temps)
   (check-temps temps 5 95))
@@ -33,10 +35,8 @@
 (define (average nums sum count)
   (type-case (Listof Number) nums
     [empty (/ sum count)]
-    [(cons n restns) (average
-                      restns
-                      (+ sum n)
-                      (add1 count))]))
+    [(cons n restns)
+     (average restns (+ sum n) (add1 count))]))
 
 (define (average-price prices)
   (if (cons? prices)
@@ -80,7 +80,7 @@
   (let ([count (count-persons pedigree)])
     (if (zero? count)
         (error 'badaverage "bad div")
-        (/ (sum-ages pedigree) count))))
+        (floor (/ (sum-ages pedigree) count)))))
 
 (define (eye-colors pedigree)
   (type-case Pedigree pedigree
@@ -144,4 +144,4 @@
        (person "me" 2013 'green
                (person "father" 1989 'brown (unknown) (unknown))
                (person "mother" 1990 'green (unknown) (unknown))))
-      77/3)
+      25)
