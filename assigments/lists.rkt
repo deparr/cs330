@@ -51,6 +51,8 @@
 (define (eliminate-exp ua lop)
   (filter (lambda (val) (<= val ua)) lop))
 
+; TODO: not sure how to get around the type checker
+;	and use type-case for this one
 (define (suffixes l)
   (cond
     [(empty? l) (cons l empty)]

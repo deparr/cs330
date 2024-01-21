@@ -2,7 +2,6 @@
 
 (print-only-errors #t)
 
-; common definitions
 (define (pow2 num)
   (* num num))
 (define pi 3.141592653589)
@@ -18,9 +17,7 @@
    ; ends
    (* 2 (* pi (pow2 radius)))
    ; sides
-   (* height (* 2 (* pi radius)))
-   )
-  )
+   (* height (* 2 (* pi radius)))))
 
 ; inside : 2 * pi * inner-rad * length
 ; outside : 2 * pi * outer-rad * length
@@ -44,7 +41,7 @@
      (* (- gross-pay 240) 0.15)]
     [else 0]))
 
-(define (gross-pay hours wage)
+(define (net-pay hours wage)
   (let ([gross (* hours wage)])
     (- gross (tax gross))))
 
@@ -106,11 +103,9 @@
      (square (position (+ (position-x c) delta) (position-y c)) l)]
 
     [(rectangle c w h)
-     (rectangle (position (+ (position-x c) delta) (position-y c)) h w)]))
+     (rectangle (position (+ (position-x c) delta) (position-y c)) w h)]))
 
-
-; this is so bad, sorry.
-(define (in-shape shape p)
+(define (in-shape? shape p)
   (let ([p-x (position-x p)]
         [p-y (position-y p)])
     (type-case Shape shape
@@ -126,23 +121,23 @@
        (let ([left-x (position-x c)]
              [top-y (position-y c)]
              [right-x (+ (position-x c) l)]
-             [bot-y (+ (position-y c) l)])
+             [bot-y (- (position-y c) l)])
 
          (and (> p-x left-x)
               (< p-x right-x)
-              (> p-y top-y)
-              (< p-y bot-y)))]
+              (< p-y top-y)
+              (> p-y bot-y)))]
 
       [(rectangle c w h)
        (let ([left-x (position-x c)]
              [top-y (position-y c)]
              [right-x (+ (position-x c) w)]
-             [bot-y (+ (position-y c) h)])
+             [bot-y (- (position-y c) h)])
 
          (and (> p-x left-x)
               (< p-x right-x)
-              (> p-y top-y)
-              (< p-y bot-y)))])))
+              (< p-y top-y)
+              (> p-y bot-y)))])))
 
 (test (sum-coins 5 1 2 3) 105)
 (test (sum-coins 100 100 100 100) 4100)
@@ -152,7 +147,7 @@
 (test (area-pipe 10 1 10) 1451.4158)
 
 (test (tax 600) 69.6)
-(test (gross-pay 6 100) 530.4)
+(test (net-pay 6 100) 530.4)
 
 (test (what-kind 0 1 1) (degenerate))
 (test (what-kind 1 10 1) (twoSolutions))
@@ -171,12 +166,13 @@
 (test (translate-shape (circle (position 0 0) 10) -5) (circle (position -5 0) 10))
 (test (translate-shape (circle (position 0 10 ) 10) 5) (circle (position 5 10) 10))
 
-(test (in-shape (square (position 0 0 ) 6) (position 2 4)) #t)
-(test (in-shape (square (position 0 0 ) 6) (position 7 4)) #f)
-(test (in-shape (square (position 0 0 ) 6) (position 4 7)) #f)
-(test (in-shape (rectangle (position 0 0 ) 6 10) (position 4 7)) #t)
-(test (in-shape (rectangle (position 0 0 ) 6 10) (position 7 4)) #f)
-(test (in-shape (rectangle (position 0 0 ) 6 10) (position 7 4)) #f)
-(test (in-shape (circle (position 0 0 ) 6) (position 4 4)) #t)
-(test (in-shape (circle (position 0 0 ) 6) (position 6.1 0)) #f)
+(test (translate-shape (rectangle (position 0 0 ) 1 2) 1) (rectangle (position 1 0) 1 2))
+
+(test (in-shape? (square (position 0 0 ) 6) (position 2 -4)) #t)
+(test (in-shape? (square (position 0 0 ) 6) (position 7 4)) #f)
+(test (in-shape? (square (position 0 0 ) 6) (position 4 7)) #f)
+(test (in-shape? (rectangle (position 0 6) 10 6) (position 5 4)) #t)
+(test (in-shape? (rectangle (position 0 0 ) 6 10) (position 7 4)) #f)
+(test (in-shape? (circle (position 0 0 ) 6) (position 4 4)) #t)
+(test (in-shape? (circle (position 0 0 ) 6) (position 6.1 0)) #f)
 
