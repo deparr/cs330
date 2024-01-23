@@ -115,8 +115,8 @@
 
 (test (eliminate-exp 5 '(3 4 5 6 7 8)) '(3 4 5))
 
-(test (suffixes '('a 'b 'c 'd))
-      (list '('a 'b 'c 'd) '('b 'c 'd) '('c 'd) '('d) '()))
+(test (suffixes (list 'a 'b 'c 'd))
+	(list (list 'a 'b 'c 'd) (list 'b 'c 'd) (list 'c 'd) (list 'd) (list)))
 
 (test (count-persons
        (person "me" 0 'green
