@@ -85,13 +85,15 @@
 (test (flatten-foldr (list (list 1 2) (list 3 4 5) (list 6))) (list 1 2 3 4 5 6))
 (test (flatten-foldr empty) empty)
 
-(test (bucket '(1 1 2 2 2 3 1 1 1 2 3 3 ))
+(test (bucket (list 1 1 2 2 2 3 1 1 1 2 3 3 ))
       (list (list 1 1) (list 2 2 2 ) (list 3) (list 1 1 1) (list 2) (list 3 3)))
 (test (bucket empty) (list))
 
 (test (add-last-name (person "child" 1997 'gray
-                             (person "father" 1970 'brown (unknown) (unknown)) (person "mother" 1971 'blue (unknown) (unknown)))
+                             (person "father" 1970 'brown (unknown) (unknown))
+							 (person "mother" 1971 'blue (unknown) (unknown)))
                      "last-name")
       (person "child last-name" 1997 'gray
               (person "father last-name" 1970 'brown (unknown) (unknown))
               (person "mother last-name" 1971 'blue (unknown) (unknown))))
+
