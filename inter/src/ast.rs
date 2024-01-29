@@ -66,6 +66,7 @@ impl Display for UnaryOp {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum BinOp {
     // The `+` operator (addition)
