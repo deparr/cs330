@@ -83,8 +83,6 @@ enum BinOp {
     And,
     // The `||` operator (logical or)
     Or,
-    // The `^^` operator (logical xor)
-    Xor,
     // The `^` operator (bitwise xor)
     BitXor,
     // The `&` operator (bitwise and)
@@ -120,7 +118,6 @@ impl Display for BinOp {
             Rem => write!(f, "%"),
             And => write!(f, "&&"),
             Or => write!(f, "||"),
-            Xor => write!(f, "^^"),
             BitXor => write!(f, "^"),
             BitAnd => write!(f, "&"),
             BitOr => write!(f, "|"),
@@ -268,7 +265,7 @@ impl Display for Expr {
                     Add | Sub | Mul | Div | Rem | BitOr | BitAnd | BitXor | Shl | Shr => {
                         "arithmetic"
                     }
-                    Or | And | Xor => "logical",
+                    Or | And => "logical",
                     Eq | Ne | Lt | Le | Gt | Ge => "relational",
                 };
                 write!(f, "({} {} {} {})", op_type, expr.op, expr.lhs, expr.rhs)
@@ -293,19 +290,19 @@ impl Display for Expr {
 
 #[derive(Debug)]
 pub struct Program {
-    prog: Box<Expr>,
+    prog: Expr,
 }
 
 impl Program {
     pub fn new(expr: &serde_json::Value) -> Self {
         Program {
-            prog: Box::new(Expr::new(expr)),
+            prog: Expr::new(expr),
         }
     }
 }
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self.prog)
+        write!(f, "{}", self.prog)
     }
 }
