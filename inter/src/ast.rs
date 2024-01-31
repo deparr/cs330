@@ -280,7 +280,7 @@ impl Display for Expr {
                 write!(f, "(conditional {} {} {})", expr.test, expr.cons, expr.altr)
             }
             Literal(raw) => {
-                // TODO this probably needs to change later
+                // TODO this needs to change later
                 if raw.bytes().all(|c| c.is_ascii_digit()) {
                     write!(f, "(number {})", raw)
                 } else {
