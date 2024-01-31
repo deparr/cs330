@@ -2,5 +2,6 @@ target/
 node_modules/
 bun.lockb
 *.tar
+*.zip
 submission-output
 cs330-submit.rkt
