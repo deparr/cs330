@@ -1,3 +1,3 @@
 mod ast;
 
-pub use crate::ast::Program;
+pub use crate::ast::{Program, Value};
