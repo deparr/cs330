@@ -256,6 +256,14 @@ impl Value {
             unimplemented!("tried to create inter::ast::Value out of unsupported type")
         }
     }
+
+    fn extract_bool(self) -> Result<bool, &'static str> {
+        if let Self::Bool(b) = self {
+            Ok(b == true)
+        } else {
+            Err("non bool value in bool operator")
+        }
+    }
 }
 
 impl Display for Value {
@@ -300,34 +308,29 @@ impl Expr {
     fn eval(&self) -> Result<Value, &str> {
         use Expr::*;
         use Value::*;
+        // I really hate this but don't really have time to find a better way
         match self {
             Binary(expr) => {
-                let lhs = expr.lhs.eval()?;
-                let rhs = expr.rhs.eval()?;
-
                 use BinOp::*;
-                // this is so ass
                 match expr.op {
                     // number -> number
                     Add | Sub | Mul | Div => {
+                        let lhs = expr.lhs.eval()?;
+                        let rhs = expr.rhs.eval()?;
                         match (lhs, rhs) {
-                            (Int(l), Int(r)) => {
-                                // not sure if i can capture the op match somehow
-                                // this is ass
-                                match expr.op {
-                                    Add => Ok(Int(l + r)),
-                                    Sub => Ok(Int(l - r)),
-                                    Mul => Ok(Int(l * r)),
-                                    Div => {
-                                        if r == 0 {
-                                            eval_error("divide by zero")
-                                        } else {
-                                            Ok(Int(l / r))
-                                        }
+                            (Int(l), Int(r)) => match expr.op {
+                                Add => Ok(Int(l + r)),
+                                Sub => Ok(Int(l - r)),
+                                Mul => Ok(Int(l * r)),
+                                Div => {
+                                    if r == 0 {
+                                        eval_error("divide by zero")
+                                    } else {
+                                        Ok(Int(l / r))
                                     }
-                                    _ => unreachable!("op in BinOp::Int"),
                                 }
-                            }
+                                _ => unreachable!("op in BinOp::Int"),
+                            },
                             (Float(l), Float(r)) => match expr.op {
                                 Add => Ok(Float(l + r)),
                                 Sub => Ok(Float(l - r)),
@@ -346,75 +349,79 @@ impl Expr {
                     }
 
                     // number -> boolean
-                    Lt | Le | Gt | Ge => {
+                    Lt | Le | Gt | Ge | Eq | Ne => {
+                        let lhs = expr.lhs.eval()?;
+                        let rhs = expr.rhs.eval()?;
                         match (lhs, rhs) {
-                            (Int(l), Int(r)) => {
-                                // not sure if i can capture the op match somehow
-                                // this is ass
-                                Ok(Bool(match expr.op {
-                                    Lt => l < r,
-                                    Le => l <= r,
-                                    Gt => l > r,
-                                    Ge => l >= r,
-                                    _ => unreachable!("op in BinOp::Rel::Int"),
-                                }))
-                            }
+                            (Int(l), Int(r)) => Ok(Bool(match expr.op {
+                                Lt => l < r,
+                                Le => l <= r,
+                                Gt => l > r,
+                                Ge => l >= r,
+                                Eq => l == r,
+                                Ne => l != r,
+                                _ => unreachable!("op in BinOp::Rel::Int"),
+                            })),
                             (Float(l), Float(r)) => Ok(Bool(match expr.op {
                                 Lt => l < r,
                                 Le => l <= r,
                                 Gt => l > r,
                                 Ge => l >= r,
+                                Eq => l == r,
+                                Ne => l != r,
                                 _ => unreachable!("op in BinOp::Rel::Float"),
                             })),
-                            _ => eval_error("relation bin op on non number"),
+                            _ => eval_error("relation bin op on non number or mixed numbers"),
                         }
                     }
                     // int -> int
-                    Rem | BitXor | BitOr | BitAnd | Shl | Shr => match (lhs, rhs) {
-                        (Int(l), Int(r)) => Ok(Int(match expr.op {
-                            Rem => l % r,
-                            BitXor => l ^ r,
-                            BitOr => l | r,
-                            BitAnd => l & r,
-                            Shl => l << r,
-                            Shr => r >> r,
-                            _ => unreachable!(),
-                        })),
-                        _ => eval_error("bit op on non ints"),
-                    },
-                    // number/boolean -> boolean
-                    Eq | Ne => match (lhs, rhs) {
-                        (Int(l), Int(r)) => Ok(Bool(match expr.op {
-                            Eq => l == r,
-                            Ne => l != r,
-                            _ => unreachable!(),
-                        })),
-                        (Float(l), Float(r)) => Ok(Bool(match expr.op {
-                            Eq => l == r,
-                            Ne => l != r,
-                            _ => unreachable!(),
-                        })),
-                        (String(l), String(r)) => Ok(Bool(match expr.op {
-                            Eq => l == r,
-                            Ne => l != r,
-                            _ => unreachable!(),
-                        })),
-                        (Bool(l), Bool(r)) => Ok(Bool(match expr.op {
-                            Eq => l == r,
-                            Ne => l != r,
-                            _ => unreachable!(),
-                        })),
-                        _ => eval_error("bin op equality on separate types"),
-                    },
+                    Rem | BitXor | BitOr | BitAnd | Shl | Shr => {
+                        let lhs = expr.lhs.eval()?;
+                        let rhs = expr.rhs.eval()?;
+                        match (lhs, rhs) {
+                            (Int(l), Int(r)) => Ok(Int(match expr.op {
+                                Rem => l % r,
+                                BitXor => l ^ r,
+                                BitOr => l | r,
+                                BitAnd => l & r,
+                                Shl => l << r,
+                                Shr => l >> r,
+                                _ => unreachable!(),
+                            })),
+                            _ => eval_error("bit op on non ints"),
+                        }
+                    }
                     // boolean -> boolean
-                    And | Or => match (lhs, rhs) {
-                        (Bool(l), Bool(r)) => Ok(Bool(match expr.op {
-                            And => l && r,
-                            Or => l || r,
-                            _ => unreachable!(),
-                        })),
-                        _ => eval_error("bin op logical on non bools"),
-                    },
+                    Or => {
+                        let lhs = expr.lhs.eval()?;
+                        let lhs = lhs.extract_bool()?;
+                        if lhs {
+                            Ok(Bool(true))
+                        } else {
+                            let rhs = expr.rhs.eval()?;
+                            let rhs = rhs.extract_bool()?;
+                            if rhs {
+                                return Ok(Bool(true));
+                            } else {
+                                return Ok(Bool(false));
+                            }
+                        }
+                    }
+                    And => {
+                        let lhs = expr.lhs.eval()?;
+                        let lhs = lhs.extract_bool()?;
+                        if ! lhs {
+                            Ok(Bool(false))
+                        } else {
+                            let rhs = expr.rhs.eval()?;
+                            let rhs = rhs.extract_bool()?;
+                            if rhs {
+                                return Ok(Bool(true));
+                            } else {
+                                return Ok(Bool(false));
+                            }
+                        }
+                    }
                 }
             }
             Unary(expr) => {
@@ -455,7 +462,7 @@ impl Expr {
                 }
             }
             // this sucks, can you really not impl copy if you have a string???
-            //   theres gotta be a way
+            //   theres gotta be a way, they're small strings but still
             Literal(val) => Ok(match val {
                 Int(v) => Int(*v),
                 Float(v) => Float(*v),

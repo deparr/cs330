@@ -6,21 +6,24 @@ This is a rust project, so building with `cargo`, the Rust package manager, is p
 
 You *should* be fine with any recent-ish rust version, but if you want to be sure, I used version `stable 1.75`.
 
-# Parser
+# Evaluator
 The expression data structure is defined in `src/ast.rs`.  
-The parser main file is `src/bin/parser.rs`, run it with  
+The parser main file is `src/bin/eval.rs`, run it with the following commands:
 ```sh
-# by default it expects the ast on stdin
-cargo run --bin parser
+# run the evaluator, expects ast input on stdin
+make run
 
 # pipe in ast file
-cat ast.json | cargo run --bin parser
+cat ast.json |  make run
 
-# have the parser exec acorn and capture output, acorn needs to be in PATH
-cargo run --bin parser -- --exec
+# use `acorn` to generate ast, assumes `acorn` is executable
+make run-acorn
 
 # or if you want to run the binary directly
-cargo build
-./target/debug/parser
+make build
+./target/debug/eval
+
+# to remove build artifacts
+make clean
 ```
 This will also download and compile the necessary dependencies: [serde](https://github.com/serde-rs/serde) and [serde_json](https://github.com/serde-rs/json).
