@@ -4,7 +4,7 @@
 (define (check-temperate temps)
   (check-temps temps 95 5))
 
-(define (check-temps temps high low)
+(define (check-temps temps low high)
   (foldl (lambda (v acc)
            (and acc (<= v high) (>= v low)))
          #t
@@ -96,4 +96,3 @@
       (person "child last-name" 1997 'gray
               (person "father last-name" 1970 'brown (unknown) (unknown))
               (person "mother last-name" 1971 'blue (unknown) (unknown))))
-
