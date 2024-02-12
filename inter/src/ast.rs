@@ -40,7 +40,7 @@
 //                       | &&
 // <ConditionalExpression> ::= <Expression> ? <Expression> : <Expression>
 
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 #[derive(Debug)]
 enum UnaryOp {
@@ -228,6 +228,32 @@ impl CondExpr {
 }
 
 #[derive(Debug)]
+struct BindExpr {
+    ident: String,
+    bind: Expr,
+}
+
+impl BindExpr {
+    fn new(expr: &serde_json::Value) -> Self {
+        let ident = String::from(
+            expr.get("id")
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+        );
+
+        let bind = Expr::new(expr.get("init").unwrap());
+
+        BindExpr {
+            ident,
+            bind,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Value {
     String(String),
     Bool(bool),
@@ -278,11 +304,56 @@ impl Display for Value {
     }
 }
 
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        use Value::*;
+        match self {
+            String(s) => String(s.clone()),
+            Bool(b) => Bool(*b),
+            Int(i) => Int(*i),
+            Float(f) => Float(*f),
+        }
+    }
+}
+
+struct Environ {
+    env: HashMap<String, Value>,
+}
+
+impl Environ {
+    fn empty() -> Self {
+        Environ {
+            env: HashMap::new(),
+        }
+    }
+
+    fn extend(&self, ident: String, val: Value) -> Self {
+        let mut extended = self.env.clone();
+        extended.insert(ident, val);
+        Environ { env: extended }
+    }
+
+    fn extend_iter(&self, iter: core::slice::Iter<'_, BindExpr>) -> Self {
+        let mut extended = self.env.clone().extend(iter.map(|bind| {
+            (bind.ident)
+        }));
+        Environ {
+            env: extended,
+        }
+    }
+
+    fn lookup(&self, ident: &str) -> Option<&Value> {
+        self.env.get(ident)
+    }
+}
+
 #[derive(Debug)]
 enum Expr {
     Binary(Box<BinaryExpr>),
     Unary(Box<UnaryExpr>),
     Conditional(Box<CondExpr>),
+    Bind(Vec<BindExpr>),
+    Ref(String),
     Literal(Value),
 }
 
@@ -300,12 +371,20 @@ impl Expr {
             "UnaryExpression" => Expr::Unary(Box::new(UnaryExpr::new(expr))),
             "ConditionalExpression" => Expr::Conditional(Box::new(CondExpr::new(expr))),
             "Literal" => Expr::Literal(Value::new(expr)),
-            "Expression" => todo!("`expression` type match arm"),
+            "Identifier" => Expr::Ref(expr.get("name").unwrap().as_str().unwrap().into()),
+            "VariableDeclaration" => {
+                let mut binds = Vec::new();
+                let decs = expr.get("declarations").unwrap().as_array().unwrap();
+                for dec in decs {
+                    binds.push(BindExpr::new(expr))
+                }
+                Expr::Bind(binds)
+            }
             _ => todo!("reached end of expr type match arms: {}", expr_type),
         }
     }
 
-    fn eval(&self) -> Result<Value, &str> {
+    fn eval(&self, env: &Environ) -> Result<Value, &str> {
         use Expr::*;
         use Value::*;
         // I really hate this but don't really have time to find a better way
@@ -315,8 +394,8 @@ impl Expr {
                 match expr.op {
                     // number -> number
                     Add | Sub | Mul | Div => {
-                        let lhs = expr.lhs.eval()?;
-                        let rhs = expr.rhs.eval()?;
+                        let lhs = expr.lhs.eval(env)?;
+                        let rhs = expr.rhs.eval(env)?;
                         match (lhs, rhs) {
                             (Int(l), Int(r)) => match expr.op {
                                 Add => Ok(Int(l + r)),
@@ -350,8 +429,8 @@ impl Expr {
 
                     // number -> boolean
                     Lt | Le | Gt | Ge | Eq | Ne => {
-                        let lhs = expr.lhs.eval()?;
-                        let rhs = expr.rhs.eval()?;
+                        let lhs = expr.lhs.eval(env)?;
+                        let rhs = expr.rhs.eval(env)?;
                         match (lhs, rhs) {
                             (Int(l), Int(r)) => Ok(Bool(match expr.op {
                                 Lt => l < r,
@@ -376,8 +455,8 @@ impl Expr {
                     }
                     // int -> int
                     Rem | BitXor | BitOr | BitAnd | Shl | Shr => {
-                        let lhs = expr.lhs.eval()?;
-                        let rhs = expr.rhs.eval()?;
+                        let lhs = expr.lhs.eval(env)?;
+                        let rhs = expr.rhs.eval(env)?;
                         match (lhs, rhs) {
                             (Int(l), Int(r)) => Ok(Int(match expr.op {
                                 Rem => l % r,
@@ -393,12 +472,12 @@ impl Expr {
                     }
                     // boolean -> boolean
                     Or => {
-                        let lhs = expr.lhs.eval()?;
+                        let lhs = expr.lhs.eval(env)?;
                         let lhs = lhs.extract_bool()?;
                         if lhs {
                             Ok(Bool(true))
                         } else {
-                            let rhs = expr.rhs.eval()?;
+                            let rhs = expr.rhs.eval(env)?;
                             let rhs = rhs.extract_bool()?;
                             if rhs {
                                 return Ok(Bool(true));
@@ -408,12 +487,12 @@ impl Expr {
                         }
                     }
                     And => {
-                        let lhs = expr.lhs.eval()?;
+                        let lhs = expr.lhs.eval(env)?;
                         let lhs = lhs.extract_bool()?;
-                        if ! lhs {
+                        if !lhs {
                             Ok(Bool(false))
                         } else {
-                            let rhs = expr.rhs.eval()?;
+                            let rhs = expr.rhs.eval(env)?;
                             let rhs = rhs.extract_bool()?;
                             if rhs {
                                 return Ok(Bool(true));
@@ -425,7 +504,7 @@ impl Expr {
                 }
             }
             Unary(expr) => {
-                let arg = expr.expr.eval()?;
+                let arg = expr.expr.eval(env)?;
 
                 use UnaryOp::*;
                 match expr.op {
@@ -450,12 +529,12 @@ impl Expr {
                 }
             }
             Conditional(expr) => {
-                let test = expr.test.eval()?;
+                let test = expr.test.eval(env)?;
                 if let Bool(cond) = test {
                     if cond {
-                        Ok(expr.cons.eval()?)
+                        Ok(expr.cons.eval(env)?)
                     } else {
-                        Ok(expr.altr.eval()?)
+                        Ok(expr.altr.eval(env)?)
                     }
                 } else {
                     eval_error("conditional non bool test")
@@ -469,6 +548,19 @@ impl Expr {
                 Bool(v) => Bool(*v),
                 String(s) => String(s.clone()),
             }),
+            Bind(binds) => {
+                // cant use map here because of eval's signature
+                let bind_pairs = Vec::with_capacity(binds.len());
+                for bind in binds {
+                    let val = bind.bind.eval(env)?;
+                    bind_pairs.push((bind.ident, val));
+                }
+                // TODO how to eval bind statements and then the body expr
+            }
+            Ref(ident) => match env.lookup(ident) {
+                Some(val) => Ok(*val),
+                None => eval_error(&format!("unbound identifier {}", ident)),
+            },
         }
     }
 }
@@ -497,6 +589,12 @@ impl Display for Expr {
             Literal(val) => {
                 write!(f, "{}", val)
             }
+            Ref(ident) => {
+                write!(f, "{}", ident)
+            }
+            Bind(expr) => {
+                write!(f, "(let {} {} {})", expr.ident, expr.bind, expr.body)
+            }
         }
     }
 }
@@ -514,7 +612,7 @@ impl Program {
     }
 
     pub fn run(&self) -> Result<Value, &str> {
-        self.prog.eval()
+        self.prog.eval(&Environ::empty())
     }
 }
 
