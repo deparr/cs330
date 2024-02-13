@@ -1,45 +1,3 @@
-// <Program> ::= <Statement>
-// <Statement> ::= <ExpressionStatement>
-// <ExpressionStatement> ::= <Expression>
-// <Expression> ::= <Literal>
-//                 | <BinaryExpression>
-//                 | <UnaryExpression>
-//                 | <LogicalExpression>
-//                 | <ConditionExpression>
-// <Literal> ::= <number>
-//              | <boolean>
-// <number>    ::= [<sign>]<digit>+
-// <sign>      ::= +
-//               | -
-// <digit>     ::= 0
-//               | 2
-//               | 3
-//               | 4
-//               | 5
-//               | 6
-//               | 7
-//               | 8
-//               | 9
-// <boolean>   ::= true
-//               | false
-// <BinaryExpression> ::= <Expression> <BinaryOperator> <Expression>
-// <BinaryOperator>    ::= +
-//                       | -
-//                       | *
-//                       | /
-//                       | ==
-//                       | <
-//                       | >
-//                       | <=
-//                       | >=
-//                       | -
-// <UnaryExpression>   ::= <UnaryOperator> <Expression>
-// <UnaryOperator>     ::= !
-// <LogicalExpression> ::= <Expression> <LogicalOperator> <Expression>
-// <LogicalOperator>   ::= ||
-//                       | &&
-// <ConditionalExpression> ::= <Expression> ? <Expression> : <Expression>
-
 use std::{collections::HashMap, fmt::Display};
 
 #[derive(Debug)]
@@ -246,10 +204,7 @@ impl BindExpr {
 
         let bind = Expr::new(expr.get("init").unwrap());
 
-        BindExpr {
-            ident,
-            bind,
-        }
+        BindExpr { ident, bind }
     }
 }
 
@@ -316,6 +271,7 @@ impl Clone for Value {
     }
 }
 
+#[derive(Debug)]
 struct Environ {
     env: HashMap<String, Value>,
 }
@@ -333,16 +289,7 @@ impl Environ {
         Environ { env: extended }
     }
 
-    fn extend_iter(&self, iter: core::slice::Iter<'_, BindExpr>) -> Self {
-        let mut extended = self.env.clone().extend(iter.map(|bind| {
-            (bind.ident)
-        }));
-        Environ {
-            env: extended,
-        }
-    }
-
-    fn lookup(&self, ident: &str) -> Option<&Value> {
+    fn lookup(&self, ident: &String) -> Option<&Value> {
         self.env.get(ident)
     }
 }
@@ -372,11 +319,13 @@ impl Expr {
             "ConditionalExpression" => Expr::Conditional(Box::new(CondExpr::new(expr))),
             "Literal" => Expr::Literal(Value::new(expr)),
             "Identifier" => Expr::Ref(expr.get("name").unwrap().as_str().unwrap().into()),
+            "ExpressionStatement" => Expr::new(expr.get("expression").unwrap()),
+            "AssignmentExpression" => todo!("Assignment expressions"),
             "VariableDeclaration" => {
                 let mut binds = Vec::new();
                 let decs = expr.get("declarations").unwrap().as_array().unwrap();
                 for dec in decs {
-                    binds.push(BindExpr::new(expr))
+                    binds.push(BindExpr::new(dec))
                 }
                 Expr::Bind(binds)
             }
@@ -481,9 +430,8 @@ impl Expr {
                             let rhs = rhs.extract_bool()?;
                             if rhs {
                                 return Ok(Bool(true));
-                            } else {
-                                return Ok(Bool(false));
                             }
+                            Ok(Bool(false))
                         }
                     }
                     And => {
@@ -496,9 +444,8 @@ impl Expr {
                             let rhs = rhs.extract_bool()?;
                             if rhs {
                                 return Ok(Bool(true));
-                            } else {
-                                return Ok(Bool(false));
                             }
+                            Ok(Bool(false))
                         }
                     }
                 }
@@ -548,18 +495,12 @@ impl Expr {
                 Bool(v) => Bool(*v),
                 String(s) => String(s.clone()),
             }),
-            Bind(binds) => {
-                // cant use map here because of eval's signature
-                let bind_pairs = Vec::with_capacity(binds.len());
-                for bind in binds {
-                    let val = bind.bind.eval(env)?;
-                    bind_pairs.push((bind.ident, val));
-                }
-                // TODO how to eval bind statements and then the body expr
+            Bind(_) => {
+                todo!("eval bind exprs in Expr::eval");
             }
-            Ref(ident) => match env.lookup(ident) {
-                Some(val) => Ok(*val),
-                None => eval_error(&format!("unbound identifier {}", ident)),
+            Ref(ident) => match env.lookup(&ident) {
+                Some(val) => Ok(val.clone()),
+                None => eval_error("unbound identifier"),
             },
         }
     }
@@ -592,8 +533,12 @@ impl Display for Expr {
             Ref(ident) => {
                 write!(f, "{}", ident)
             }
-            Bind(expr) => {
-                write!(f, "(let {} {} {})", expr.ident, expr.bind, expr.body)
+            Bind(exprs) => {
+                write!(f, "(let ").expect("unable to print bind");
+                exprs.iter().for_each(|expr| {
+                    write!(f, "{} = {}, ", expr.ident, expr.bind).expect("unable to print bind 2");
+                });
+                write!(f, ")")
             }
         }
     }
@@ -601,23 +546,49 @@ impl Display for Expr {
 
 #[derive(Debug)]
 pub struct Program {
-    prog: Expr,
+    binds: Vec<Expr>,
+    statement: Expr,
 }
 
 impl Program {
-    pub fn new(expr: &serde_json::Value) -> Self {
+    pub fn new(body: &serde_json::Value) -> Self {
+        let body = body.as_array().unwrap();
+        let mut expressions: Vec<Expr> = body.into_iter().map(|stat| Expr::new(stat)).collect();
+
+        // hack
+        let statement = match expressions.pop() {
+            Some(expr) => expr,
+            None => Expr::Literal(Value::String(String::new())),
+        };
+
         Program {
-            prog: Expr::new(expr),
+            binds: expressions,
+            statement,
         }
     }
 
     pub fn run(&self) -> Result<Value, &str> {
-        self.prog.eval(&Environ::empty())
+        let mut env = Environ::empty();
+
+        // eval binds
+        for bind in &self.binds {
+            if let Expr::Bind(bind_exprs) = bind {
+                for expr in bind_exprs {
+                    let val = expr.bind.eval(&env)?;
+                    env = env.extend(expr.ident.clone(), val);
+                }
+            } else {
+                unreachable!("non bind expr in Prog.binds");
+            }
+        }
+
+        // eval final statement
+        self.statement.eval(&env)
     }
 }
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.prog)
+        write!(f, "{}", self.statement)
     }
 }
