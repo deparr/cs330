@@ -553,7 +553,14 @@ pub struct Program {
 impl Program {
     pub fn new(body: &serde_json::Value) -> Self {
         let body = body.as_array().unwrap();
-        let mut expressions: Vec<Expr> = body.into_iter().map(|stat| Expr::new(stat)).collect();
+        let mut i = 0;
+        // last item is always expr
+        while i < body.len() {
+            let expr = body[i].get("type").unwrap().as_str().unwrap();
+            if expr != "VariableDeclaration" {
+                break;
+            }
+        }
 
         // hack
         let statement = match expressions.pop() {
