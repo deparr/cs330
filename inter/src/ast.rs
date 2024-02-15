@@ -187,24 +187,45 @@ impl CondExpr {
 
 #[derive(Debug)]
 struct BindExpr {
-    ident: String,
-    bind: Expr,
+    // ident: String,
+    // bind: Expr,
+    binds: Vec<(String, Expr)>,
+    body: Expr
 }
 
+
 impl BindExpr {
-    fn new(expr: &serde_json::Value) -> Self {
-        let ident = String::from(
-            expr.get("id")
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-        );
+    // TODO move this to program::new() so have access to body + index
+    fn new(expr: &serde_json::Value, rest: &[serde_json::Value]) -> Self {
+        let mut binds = Vec::new();
 
-        let bind = Expr::new(expr.get("init").unwrap());
+        let declarations = expr.get("declarations").unwrap().as_array().unwrap();
+        for dec in declarations {
+            let ident = dec.get("id").unwrap().get("name").unwrap().as_str().unwrap();
+            let init = dec.get("init").unwrap();
+            let init = Expr::new(init);
 
-        BindExpr { ident, bind }
+            binds.push((ident.to_owned(), init));
+        }
+
+        let body = match rest.first() {
+            Some(expr) => {
+                match expr.get("type").unwrap().as_str().unwrap() {
+                    "VariableDeclaration" => {
+                        Expr::Bind(Box::new(BindExpr::new(expr, &rest[1..])))
+                    }
+                    _ => {
+                        Expr::new(expr)
+                    }
+                }
+            },
+            None => unimplemented!("Err: BindExpr with no body expr")
+        };
+
+        BindExpr {
+            binds,
+            body,
+        }
     }
 }
 
@@ -299,7 +320,7 @@ enum Expr {
     Binary(Box<BinaryExpr>),
     Unary(Box<UnaryExpr>),
     Conditional(Box<CondExpr>),
-    Bind(Vec<BindExpr>),
+    Bind(Box<BindExpr>),
     Ref(String),
     Literal(Value),
 }
@@ -308,7 +329,7 @@ impl Expr {
     fn new(expr: &serde_json::Value) -> Self {
         let expr_type = match expr.get("type") {
             Some(t) => t.as_str().unwrap(),
-            None => unreachable!("none expr type should be unreachable"),
+            None => unimplemented!("none expr type should be unreachable"),
         };
 
         match expr_type {
@@ -321,14 +342,6 @@ impl Expr {
             "Identifier" => Expr::Ref(expr.get("name").unwrap().as_str().unwrap().into()),
             "ExpressionStatement" => Expr::new(expr.get("expression").unwrap()),
             "AssignmentExpression" => todo!("Assignment expressions"),
-            "VariableDeclaration" => {
-                let mut binds = Vec::new();
-                let decs = expr.get("declarations").unwrap().as_array().unwrap();
-                for dec in decs {
-                    binds.push(BindExpr::new(dec))
-                }
-                Expr::Bind(binds)
-            }
             _ => todo!("reached end of expr type match arms: {}", expr_type),
         }
     }
@@ -357,7 +370,7 @@ impl Expr {
                                         Ok(Int(l / r))
                                     }
                                 }
-                                _ => unreachable!("op in BinOp::Int"),
+                                _ => unimplemented!("op in BinOp::Int"),
                             },
                             (Float(l), Float(r)) => match expr.op {
                                 Add => Ok(Float(l + r)),
@@ -370,7 +383,7 @@ impl Expr {
                                         Ok(Float(l / r))
                                     }
                                 }
-                                _ => unreachable!("op in BinOp::Int"),
+                                _ => unimplemented!("op in BinOp::Int"),
                             },
                             _ => eval_error("non numbers in numerical binop"),
                         }
@@ -388,7 +401,7 @@ impl Expr {
                                 Ge => l >= r,
                                 Eq => l == r,
                                 Ne => l != r,
-                                _ => unreachable!("op in BinOp::Rel::Int"),
+                                _ => unimplemented!("op in BinOp::Rel::Int"),
                             })),
                             (Float(l), Float(r)) => Ok(Bool(match expr.op {
                                 Lt => l < r,
@@ -397,7 +410,7 @@ impl Expr {
                                 Ge => l >= r,
                                 Eq => l == r,
                                 Ne => l != r,
-                                _ => unreachable!("op in BinOp::Rel::Float"),
+                                _ => unimplemented!("op in BinOp::Rel::Float"),
                             })),
                             _ => eval_error("relation bin op on non number or mixed numbers"),
                         }
@@ -414,7 +427,7 @@ impl Expr {
                                 BitAnd => l & r,
                                 Shl => l << r,
                                 Shr => l >> r,
-                                _ => unreachable!(),
+                                _ => unimplemented!(),
                             })),
                             _ => eval_error("bit op on non ints"),
                         }
@@ -495,8 +508,14 @@ impl Expr {
                 Bool(v) => Bool(*v),
                 String(s) => String(s.clone()),
             }),
-            Bind(_) => {
-                todo!("eval bind exprs in Expr::eval");
+            Bind(expr) => {
+                let mut new_env = env.clone();
+                for (ident, bind_expr) in expr.binds {
+                    let bound_val = bind_expr.eval(&new_env)?;
+                    new_env = &new_env.extend(ident, bound_val);
+                }
+
+                expr.body.eval(new_env)
             }
             Ref(ident) => match env.lookup(&ident) {
                 Some(val) => Ok(val.clone()),
@@ -533,10 +552,10 @@ impl Display for Expr {
             Ref(ident) => {
                 write!(f, "{}", ident)
             }
-            Bind(exprs) => {
+            Bind(expr) => {
                 write!(f, "(let ").expect("unable to print bind");
-                exprs.iter().for_each(|expr| {
-                    write!(f, "{} = {}, ", expr.ident, expr.bind).expect("unable to print bind 2");
+                expr.binds.iter().for_each(|expr| {
+                    write!(f, "{} = {}, ", expr.0, expr.1).expect("unable to print bind 2");
                 });
                 write!(f, ")")
             }
@@ -546,48 +565,34 @@ impl Display for Expr {
 
 #[derive(Debug)]
 pub struct Program {
-    binds: Vec<Expr>,
     statement: Expr,
 }
 
 impl Program {
     pub fn new(body: &serde_json::Value) -> Self {
         let body = body.as_array().unwrap();
-        let mut i = 0;
-        // last item is always expr
-        while i < body.len() {
-            let expr = body[i].get("type").unwrap().as_str().unwrap();
-            if expr != "VariableDeclaration" {
-                break;
-            }
-        }
-
-        // hack
-        let statement = match expressions.pop() {
+        let first = match body.first() {
             Some(expr) => expr,
-            None => Expr::Literal(Value::String(String::new())),
+            None => todo!("empty program given")
+        };
+
+        let statement = match first.get("type").unwrap().as_str().unwrap() {
+            "VariableDeclaration" => {
+                Expr::Bind(Box::new(BindExpr::new(first, body.as_slice())))
+            }
+            "ExpressionStatement" => {
+                Expr::new(first)
+            }
+            _ => todo!("unknown expression type in program::new")
         };
 
         Program {
-            binds: expressions,
             statement,
         }
     }
 
     pub fn run(&self) -> Result<Value, &str> {
-        let mut env = Environ::empty();
-
-        // eval binds
-        for bind in &self.binds {
-            if let Expr::Bind(bind_exprs) = bind {
-                for expr in bind_exprs {
-                    let val = expr.bind.eval(&env)?;
-                    env = env.extend(expr.ident.clone(), val);
-                }
-            } else {
-                unreachable!("non bind expr in Prog.binds");
-            }
-        }
+        let env = Environ::empty();
 
         // eval final statement
         self.statement.eval(&env)
