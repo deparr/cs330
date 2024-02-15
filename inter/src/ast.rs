@@ -571,6 +571,8 @@ impl Program {
         let mut env = Environ::empty();
 
         // eval binds
+        // this is cheating a bit
+        // TODO change this to functional style/recursive bindings
         for bind in &self.binds {
             if let Expr::Bind(bind_exprs) = bind {
                 for expr in bind_exprs {

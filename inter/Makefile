@@ -1,10 +1,10 @@
 run: build
-	@echo "running eval, expecting ast on stdin..."
-	cargo run --bin eval
+	@echo "running bind, expecting ast on stdin..."
+	@./target/debug/bind
 
 run-acorn: build
-	@echo "running eval..."
-	acorn --ecma2024 | cargo run --bin eval
+	@echo "running bind..."
+	@acorn --ecma2024 | ./target/debug/bind
 
 
 build:

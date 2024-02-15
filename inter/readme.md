@@ -8,7 +8,7 @@ You *should* be fine with any recent-ish rust version, but if you want to be sur
 
 # Evaluator
 The expression data structure is defined in `src/ast.rs`.  
-The parser main file is `src/bin/eval.rs`, run it with the following commands:
+The parser main file is `src/bin/bind.rs`, run it with the following commands:
 ```sh
 # run the evaluator, expects ast input on stdin
 make run
@@ -21,7 +21,9 @@ make run-acorn
 
 # or if you want to run the binary directly
 make build
-./target/debug/eval
+./target/debug/bind
+acorn --ecma2024 | ./target/debug/bind
+cat ast.json | ./target/debug/bind
 
 # to remove build artifacts
 make clean
