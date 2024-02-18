@@ -292,7 +292,7 @@ impl Clone for Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Environ {
     env: HashMap<String, Value>,
 }
@@ -500,8 +500,6 @@ impl Expr {
                     eval_error("conditional non bool test")
                 }
             }
-            // this sucks, can you really not impl copy if you have a string???
-            //   theres gotta be a way, they're small strings but still
             Literal(val) => Ok(match val {
                 Int(v) => Int(*v),
                 Float(v) => Float(*v),
@@ -510,12 +508,12 @@ impl Expr {
             }),
             Bind(expr) => {
                 let mut new_env = env.clone();
-                for (ident, bind_expr) in expr.binds {
+                for (ident, bind_expr) in &expr.binds {
                     let bound_val = bind_expr.eval(&new_env)?;
-                    new_env = &new_env.extend(ident, bound_val);
+                    new_env = new_env.extend(ident.clone(), bound_val);
                 }
 
-                expr.body.eval(new_env)
+                expr.body.eval(&new_env)
             }
             Ref(ident) => match env.lookup(&ident) {
                 Some(val) => Ok(val.clone()),
