@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 #[derive(Debug)]
 enum UnaryOp {
@@ -92,13 +92,13 @@ impl Display for BinOp {
 }
 
 #[derive(Debug)]
-struct BinaryExpr {
+struct BinaryExpr<'a, 'b> {
     op: BinOp,
-    lhs: Expr,
-    rhs: Expr,
+    lhs: Expr<'a, 'b>,
+    rhs: Expr<'a, 'b>,
 }
 
-impl BinaryExpr {
+impl BinaryExpr<'_, '_> {
     fn new(expr: &serde_json::Value) -> Self {
         let op = match expr.get("operator") {
             Some(op) => op.as_str().unwrap(),
@@ -134,12 +134,12 @@ impl BinaryExpr {
 }
 
 #[derive(Debug)]
-struct UnaryExpr {
+struct UnaryExpr<'a, 'b> {
     op: UnaryOp,
-    expr: Expr,
+    expr: Expr<'a, 'b>
 }
 
-impl UnaryExpr {
+impl UnaryExpr<'_, '_> {
     fn new(expr: &serde_json::Value) -> Self {
         let op = match expr.get("operator") {
             Some(op) => op.as_str().unwrap(),
@@ -165,13 +165,13 @@ impl UnaryExpr {
 }
 
 #[derive(Debug)]
-struct CondExpr {
-    test: Expr,
-    cons: Expr,
-    altr: Expr,
+struct CondExpr<'a, 'b> {
+    test: Expr<'a, 'b>,
+    cons: Expr<'a, 'b>,
+    altr: Expr<'a, 'b>,
 }
 
-impl CondExpr {
+impl CondExpr<'_> {
     fn new(expr: &serde_json::Value) -> Self {
         let test = expr.get("test").unwrap();
         let cons = expr.get("consequent").unwrap();
@@ -186,20 +186,25 @@ impl CondExpr {
 }
 
 #[derive(Debug)]
-struct BindExpr {
-    binds: Vec<(String, Expr)>,
-    body: Expr
+struct BindExpr<'a, 'b> {
+    binds: Vec<(String, Expr<'a, 'b>)>,
+    body: Expr<'a, 'b>,
 }
 
-
 // TODO: don't particularly like this
-impl BindExpr {
+impl BindExpr<'_, '_> {
     fn new(expr: &serde_json::Value, rest: &[serde_json::Value]) -> Self {
         let mut binds = Vec::new();
 
         let declarations = expr.get("declarations").unwrap().as_array().unwrap();
         for dec in declarations {
-            let ident = dec.get("id").unwrap().get("name").unwrap().as_str().unwrap();
+            let ident = dec
+                .get("id")
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .as_str()
+                .unwrap();
             let init = dec.get("init").unwrap();
             let init = Expr::new(init);
 
@@ -207,42 +212,66 @@ impl BindExpr {
         }
 
         let body = match rest.first() {
-            Some(expr) => {
-                match expr.get("type").unwrap().as_str().unwrap() {
-                    "VariableDeclaration" => {
-                        Expr::Bind(Box::new(BindExpr::new(expr, &rest[1..])))
-                    }
-                    _ => {
-                        Expr::new(expr)
-                    }
-                }
+            Some(expr) => match expr.get("type").unwrap().as_str().unwrap() {
+                "VariableDeclaration" => Expr::Bind(Box::new(BindExpr::new(expr, &rest[1..]))),
+                _ => Expr::new(expr),
             },
-            None => unimplemented!("Err: BindExpr with no body expr")
+            None => unimplemented!("Err: BindExpr with no body expr"),
         };
 
-        BindExpr {
-            binds,
+        BindExpr { binds, body }
+    }
+}
+
+#[derive(Debug)]
+struct FnExpr<'a, 'b> {
+    arg: String,
+    body: Expr<'a, 'b>,
+}
+impl FnExpr<'_, '_> {
+    fn new(expr: &serde_json::Value) -> FnExpr {
+        let arg = expr
+            .get("params")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap()
+            .as_str()
+            .unwrap();
+
+        let body = Expr::new(expr.get("body").unwrap());
+
+        FnExpr {
+            arg: arg.into(),
             body,
         }
     }
 }
 
 #[derive(Debug)]
-pub enum Value {
+pub struct FnValue<'a, 'b> {
+    env: Environ<'b>,
+    arg: String,
+    body: Rc<&'a Expr<'a>>,
+}
+
+#[derive(Debug)]
+pub enum Value<'a, 'b> {
     String(String),
     Bool(bool),
     Int(i64),
     Float(f64),
-    // error?
-    // Error(String),
+    Fn(FnValue<'a, 'b>),
+    Unit,
 }
 
 fn eval_error(msg: &str) -> Result<Value, &str> {
     Err(msg)
 }
 
-impl Value {
-    fn new(expr: &serde_json::Value) -> Self {
+impl Value<'_, '_> {
+    fn from_json(expr: &serde_json::Value) -> Self {
         let value = expr.get("value").unwrap();
         if value.is_i64() {
             Self::Int(value.as_i64().unwrap())
@@ -266,7 +295,7 @@ impl Value {
     }
 }
 
-impl Display for Value {
+impl Display for Value<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Value::*;
         match self {
@@ -274,12 +303,14 @@ impl Display for Value {
             Float(v) => write!(f, "(value (number {}))", v),
             Bool(v) => write!(f, "(value (boolean {}))", v),
             String(v) => write!(f, "(value (string {}))", v),
+            Fn(_) => write!(f, "(value (function))"),
+            Unit => write!(f, "(value ())"),
         }
     }
 }
 
 // TODO or this
-impl Clone for Value {
+impl Clone for Value<'_, '_> {
     fn clone(&self) -> Self {
         use Value::*;
         match self {
@@ -287,16 +318,18 @@ impl Clone for Value {
             Bool(b) => Bool(*b),
             Int(i) => Int(*i),
             Float(f) => Float(*f),
+            Unit => Unit,
+            Fn(_) => unimplemented!("Literal(Value::Func)::clone()"),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-struct Environ {
-    env: HashMap<String, Value>,
+struct Environ<'a, 'b> {
+    env: HashMap<String, Value<'a, 'b>>,
 }
 
-impl Environ {
+impl Environ<'_, '_> {
     fn empty() -> Self {
         Environ {
             env: HashMap::new(),
@@ -315,16 +348,17 @@ impl Environ {
 }
 
 #[derive(Debug)]
-enum Expr {
-    Binary(Box<BinaryExpr>),
-    Unary(Box<UnaryExpr>),
-    Conditional(Box<CondExpr>),
-    Bind(Box<BindExpr>),
+enum Expr<'a, 'b> {
+    Binary(Box<BinaryExpr<'a>>),
+    Unary(Box<UnaryExpr<'a>>),
+    Conditional(Box<CondExpr<'a>>),
+    Fn(Box<FnExpr<'a>>),
+    Bind(Box<BindExpr<'a>>),
     Ref(String),
-    Literal(Value),
+    Literal(Value<'a, 'b>),
 }
 
-impl Expr {
+impl Expr<'_, '_> {
     fn new(expr: &serde_json::Value) -> Self {
         let expr_type = match expr.get("type") {
             Some(t) => t.as_str().unwrap(),
@@ -335,14 +369,36 @@ impl Expr {
             "BinaryExpression" | "LogicalExpression" => {
                 Expr::Binary(Box::new(BinaryExpr::new(expr)))
             }
+            "BlockStatement" => {
+                match Expr::from_body(expr.get("body").unwrap().as_array().unwrap()) {
+                    Some(expr) => expr,
+                    None => Expr::Literal(Value::Unit),
+                }
+            }
+            "FunctionExpression" => Expr::Fn(Box::new(FnExpr::new(expr))),
             "UnaryExpression" => Expr::Unary(Box::new(UnaryExpr::new(expr))),
             "ConditionalExpression" => Expr::Conditional(Box::new(CondExpr::new(expr))),
-            "Literal" => Expr::Literal(Value::new(expr)),
+            "Literal" => Expr::Literal(Value::from_json(expr)),
             "Identifier" => Expr::Ref(expr.get("name").unwrap().as_str().unwrap().into()),
             "ExpressionStatement" => Expr::new(expr.get("expression").unwrap()),
-            "AssignmentExpression" => todo!("Assignment expressions"),
+            "ReturnStatement" => Expr::new(expr.get("argument").unwrap()),
+            "AssignmentExpression" => todo!("Expr::new AssignmentExpression"),
             _ => todo!("reached end of expr type match arms: {}", expr_type),
         }
+    }
+
+    fn from_body(body: &[serde_json::Value]) -> Option<Self> {
+        if body.len() < 1 {
+            return None;
+        }
+        let first = &body[0];
+        let statement = match first.get("type").unwrap().as_str().unwrap() {
+            "VariableDeclaration" => Expr::Bind(Box::new(BindExpr::new(first, &body[1..]))),
+            "ExpressionStatement" | "ReturnStatement" => Expr::new(first),
+            _ => todo!("unknown expression type in program::new"),
+        };
+
+        Some(statement)
     }
 
     fn eval(&self, env: &Environ) -> Result<Value, &str> {
@@ -499,12 +555,9 @@ impl Expr {
                     eval_error("conditional non bool test")
                 }
             }
-            Literal(val) => Ok(match val {
-                Int(v) => Int(*v),
-                Float(v) => Float(*v),
-                Bool(v) => Bool(*v),
-                String(s) => String(s.clone()),
-            }),
+            Expr::Fn(expr) => {
+                Ok(Value::Fn(FnValue { arg: expr.arg.clone(), body: Rc::new(&expr.body), env: env.clone()  } ))
+            }
             Bind(expr) => {
                 let mut new_env = env.clone();
                 for (ident, bind_expr) in &expr.binds {
@@ -518,11 +571,19 @@ impl Expr {
                 Some(val) => Ok(val.clone()),
                 None => eval_error("unbound identifier"),
             },
+            Literal(val) => Ok(match val {
+                Int(v) => Int(*v),
+                Float(v) => Float(*v),
+                Bool(v) => Bool(*v),
+                String(s) => String(s.clone()),
+                Unit => Unit,
+                Value::Fn(_) => unimplemented!("Expr::Eval::Literal(Value::Func)"),
+            }),
         }
     }
 }
 
-impl Display for Expr {
+impl Display for Expr<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Expr::*;
         match self {
@@ -543,6 +604,9 @@ impl Display for Expr {
             Conditional(expr) => {
                 write!(f, "(conditional {} {} {})", expr.test, expr.cons, expr.altr)
             }
+            Fn(expr) => {
+                write!(f, "(fn ({}) {})", expr.arg, expr.body)
+            }
             Literal(val) => {
                 write!(f, "{}", val)
             }
@@ -561,31 +625,20 @@ impl Display for Expr {
 }
 
 #[derive(Debug)]
-pub struct Program {
-    statement: Expr,
+pub struct Program<'a, 'b> {
+    statement: Expr<'a, 'b>,
 }
 
-impl Program {
+impl Program<'_, '_> {
     pub fn new(body: &serde_json::Value) -> Self {
         let body = body.as_array().unwrap();
-        let first = match body.first() {
-            Some(expr) => expr,
-            None => todo!("empty program given")
+
+        let statement = match Expr::from_body(body) {
+            Some(statement) => statement,
+            None => Expr::Literal(Value::Unit),
         };
 
-        let statement = match first.get("type").unwrap().as_str().unwrap() {
-            "VariableDeclaration" => {
-                Expr::Bind(Box::new(BindExpr::new(first, body.as_slice())))
-            }
-            "ExpressionStatement" => {
-                Expr::new(first)
-            }
-            _ => todo!("unknown expression type in program::new")
-        };
-
-        Program {
-            statement,
-        }
+        Program { statement }
     }
 
     pub fn run(&self) -> Result<Value, &str> {
@@ -594,7 +647,7 @@ impl Program {
     }
 }
 
-impl Display for Program {
+impl Display for Program<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.statement)
     }

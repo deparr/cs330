@@ -1,4 +1,4 @@
-use inter::Program;
+use inter::{Program, Environ};
 use std::{
     env, io,
     process::{Command, Stdio},
@@ -25,6 +25,7 @@ fn main() {
         .unwrap();
 
     let program = Program::new(expr);
+    let env = Environ::empty();
     match program.run() {
         Ok(v) => println!("{}", v),
         Err(e) => println!("(error \"{} banana\")", e),
