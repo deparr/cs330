@@ -92,13 +92,13 @@ impl Display for BinOp {
 }
 
 #[derive(Debug)]
-struct BinaryExpr<'a, 'b> {
+struct BinaryExpr<'a> {
     op: BinOp,
-    lhs: Expr<'a, 'b>,
-    rhs: Expr<'a, 'b>,
+    lhs: Expr<'a>,
+    rhs: Expr<'a>,
 }
 
-impl BinaryExpr<'_, '_> {
+impl BinaryExpr<'_> {
     fn new(expr: &serde_json::Value) -> Self {
         let op = match expr.get("operator") {
             Some(op) => op.as_str().unwrap(),
@@ -134,12 +134,12 @@ impl BinaryExpr<'_, '_> {
 }
 
 #[derive(Debug)]
-struct UnaryExpr<'a, 'b> {
+struct UnaryExpr<'a> {
     op: UnaryOp,
-    expr: Expr<'a, 'b>
+    expr: Expr<'a>,
 }
 
-impl UnaryExpr<'_, '_> {
+impl UnaryExpr<'_> {
     fn new(expr: &serde_json::Value) -> Self {
         let op = match expr.get("operator") {
             Some(op) => op.as_str().unwrap(),
@@ -165,10 +165,10 @@ impl UnaryExpr<'_, '_> {
 }
 
 #[derive(Debug)]
-struct CondExpr<'a, 'b> {
-    test: Expr<'a, 'b>,
-    cons: Expr<'a, 'b>,
-    altr: Expr<'a, 'b>,
+struct CondExpr<'a> {
+    test: Expr<'a>,
+    cons: Expr<'a>,
+    altr: Expr<'a>,
 }
 
 impl CondExpr<'_> {
@@ -186,13 +186,13 @@ impl CondExpr<'_> {
 }
 
 #[derive(Debug)]
-struct BindExpr<'a, 'b> {
-    binds: Vec<(String, Expr<'a, 'b>)>,
-    body: Expr<'a, 'b>,
+struct BindExpr<'a> {
+    binds: Vec<(String, Expr<'a>)>,
+    body: Expr<'a>,
 }
 
 // TODO: don't particularly like this
-impl BindExpr<'_, '_> {
+impl BindExpr<'_> {
     fn new(expr: &serde_json::Value, rest: &[serde_json::Value]) -> Self {
         let mut binds = Vec::new();
 
@@ -224,45 +224,49 @@ impl BindExpr<'_, '_> {
 }
 
 #[derive(Debug)]
-struct FnExpr<'a, 'b> {
+struct FnExpr<'a> {
     arg: String,
-    body: Expr<'a, 'b>,
+    body: Expr<'a>,
 }
-impl FnExpr<'_, '_> {
+impl FnExpr<'_> {
     fn new(expr: &serde_json::Value) -> FnExpr {
-        let arg = expr
-            .get("params")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .first()
-            .unwrap()
-            .as_str()
-            .unwrap();
+        let arg = String::from(
+            expr.get("params")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .first()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+        );
+        let body = expr.get("body").unwrap().as_array().unwrap();
 
-        let body = Expr::new(expr.get("body").unwrap());
+        let body = match Expr::from_body(body) {
+            Some(expr) => expr,
+            None => panic!("FnExpr::unable to create expr from body"),
+        };
 
-        FnExpr {
-            arg: arg.into(),
-            body,
-        }
+        FnExpr { arg, body }
     }
 }
 
 #[derive(Debug)]
-pub struct FnValue<'a, 'b> {
-    env: Environ<'b>,
+pub struct FnValue<'a> {
+    env: &'a Environ<'a>,
     arg: String,
-    body: Rc<&'a Expr<'a>>,
+    body: Box<&'a Expr<'a>>,
 }
 
 #[derive(Debug)]
-pub enum Value<'a, 'b> {
+pub enum Value<'a> {
     String(String),
     Bool(bool),
     Int(i64),
     Float(f64),
-    Fn(FnValue<'a, 'b>),
+    Fn(FnValue<'a>),
     Unit,
 }
 
@@ -270,7 +274,7 @@ fn eval_error(msg: &str) -> Result<Value, &str> {
     Err(msg)
 }
 
-impl Value<'_, '_> {
+impl Value<'_> {
     fn from_json(expr: &serde_json::Value) -> Self {
         let value = expr.get("value").unwrap();
         if value.is_i64() {
@@ -295,7 +299,7 @@ impl Value<'_, '_> {
     }
 }
 
-impl Display for Value<'_, '_> {
+impl Display for Value<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Value::*;
         match self {
@@ -310,7 +314,7 @@ impl Display for Value<'_, '_> {
 }
 
 // TODO or this
-impl Clone for Value<'_, '_> {
+impl Clone for Value<'_> {
     fn clone(&self) -> Self {
         use Value::*;
         match self {
@@ -324,41 +328,43 @@ impl Clone for Value<'_, '_> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Environ<'a, 'b> {
-    env: HashMap<String, Value<'a, 'b>>,
-}
+//#[derive(Debug, Clone)]
+// struct Environ<'a> {
+//     env: HashMap<String, Value<'a>>,
+// }
 
-impl Environ<'_, '_> {
-    fn empty() -> Self {
-        Environ {
-            env: HashMap::new(),
-        }
-    }
+type Environ<'a> = HashMap<String, Value<'a>>;
 
-    fn extend(&self, ident: String, val: Value) -> Self {
-        let mut extended = self.env.clone();
-        extended.insert(ident, val);
-        Environ { env: extended }
-    }
-
-    fn lookup(&self, ident: &String) -> Option<&Value> {
-        self.env.get(ident)
-    }
-}
+// impl Environ<'_> {
+//     fn empty() -> Self {
+//         Environ {
+//             env: HashMap::new(),
+//         }
+//     }
+//
+//     fn extend(&self, ident: String, val: Value) -> Self {
+//         let mut extended = self.env.clone();
+//         extended.insert(ident, val);
+//         Environ { env: extended }
+//     }
+//
+//     fn lookup(&self, ident: &String) -> Option<&Value> {
+//         self.env.get(ident)
+//     }
+// }
 
 #[derive(Debug)]
-enum Expr<'a, 'b> {
+enum Expr<'a> {
     Binary(Box<BinaryExpr<'a>>),
     Unary(Box<UnaryExpr<'a>>),
     Conditional(Box<CondExpr<'a>>),
     Fn(Box<FnExpr<'a>>),
     Bind(Box<BindExpr<'a>>),
     Ref(String),
-    Literal(Value<'a, 'b>),
+    Literal(Value<'a>),
 }
 
-impl Expr<'_, '_> {
+impl Expr<'_> {
     fn new(expr: &serde_json::Value) -> Self {
         let expr_type = match expr.get("type") {
             Some(t) => t.as_str().unwrap(),
@@ -375,7 +381,26 @@ impl Expr<'_, '_> {
                     None => Expr::Literal(Value::Unit),
                 }
             }
-            "FunctionExpression" => Expr::Fn(Box::new(FnExpr::new(expr))),
+            // have to do this inline for lifetime reasons
+            "FunctionExpression" => {
+                let body = match Expr::from_body(expr.get("body").unwrap().as_array().unwrap()) {
+                    Some(expr) => expr,
+                    None => Expr::Literal(Value::Unit),
+                };
+                let arg = String::from(
+                    expr.get("params")
+                        .unwrap()
+                        .as_array()
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .get("name")
+                        .unwrap()
+                        .as_str()
+                        .unwrap(),
+                );
+                Expr::Fn(Box::new(FnExpr { body, arg }))
+            }
             "UnaryExpression" => Expr::Unary(Box::new(UnaryExpr::new(expr))),
             "ConditionalExpression" => Expr::Conditional(Box::new(CondExpr::new(expr))),
             "Literal" => Expr::Literal(Value::from_json(expr)),
@@ -555,22 +580,25 @@ impl Expr<'_, '_> {
                     eval_error("conditional non bool test")
                 }
             }
-            Expr::Fn(expr) => {
-                Ok(Value::Fn(FnValue { arg: expr.arg.clone(), body: Rc::new(&expr.body), env: env.clone()  } ))
-            }
+            Expr::Fn(expr) => Ok(Value::Fn(FnValue {
+                arg: expr.arg.clone(),
+                body: Box::new(Box::leak(Box::new(&expr.body))),
+                env: Box::leak(Box::new(env))
+            })),
             Bind(expr) => {
                 let mut new_env = env.clone();
                 for (ident, bind_expr) in &expr.binds {
                     let bound_val = bind_expr.eval(&new_env)?;
-                    new_env = new_env.extend(ident.clone(), bound_val);
+                    new_env.insert(ident.clone(), bound_val);
+                    //new_env = new_env.extend(ident.clone(), bound_val);
                 }
 
                 expr.body.eval(&new_env)
             }
-            Ref(ident) => match env.lookup(&ident) {
-                Some(val) => Ok(val.clone()),
-                None => eval_error("unbound identifier"),
-            },
+            // Ref(ident) => match env.get(ident) {
+            //     Some(val) => Ok(val.clone()),
+            //     None => eval_error("unbound identifier"),
+            // },
             Literal(val) => Ok(match val {
                 Int(v) => Int(*v),
                 Float(v) => Float(*v),
@@ -579,11 +607,12 @@ impl Expr<'_, '_> {
                 Unit => Unit,
                 Value::Fn(_) => unimplemented!("Expr::Eval::Literal(Value::Func)"),
             }),
+            _ => panic!("reached end of Expr::eval match arms"),
         }
     }
 }
 
-impl Display for Expr<'_, '_> {
+impl Display for Expr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Expr::*;
         match self {
@@ -625,29 +654,46 @@ impl Display for Expr<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct Program<'a, 'b> {
-    statement: Expr<'a, 'b>,
+pub struct Program<'a> {
+    statement: Expr<'a>,
 }
 
-impl Program<'_, '_> {
-    pub fn new(body: &serde_json::Value) -> Self {
-        let body = body.as_array().unwrap();
+impl Program<'_> {
+    // pub fn new(body: &serde_json::Value) -> Self {
+    //     let body = body.as_array().unwrap();
+    //
+    //     let statement = match Expr::from_body(body) {
+    //         Some(statement) => statement,
+    //         None => Expr::Literal(Value::Unit),
+    //     };
+    //
+    //     Program { statement }
+    // }
+    //
+    // pub fn run(&self) {
+    //     let env = Environ::empty();
+    //     match self.statement.eval(&env) {
+    //         Ok(val) => println!("{}", val),
+    //         Err(err) => println!("(error \"{} banana\")", err),
+    //     };
+    // }
 
+    pub fn parse_and_run(body: &serde_json::Value) {
+        let body = body.as_array().unwrap();
         let statement = match Expr::from_body(body) {
             Some(statement) => statement,
             None => Expr::Literal(Value::Unit),
         };
 
-        Program { statement }
-    }
-
-    pub fn run(&self) -> Result<Value, &str> {
-        let env = Environ::empty();
-        self.statement.eval(&env)
+        let env = Environ::new();
+        match statement.eval(&env) {
+            Ok(val) => println!("{}", val),
+            Err(err) => println!("(error \"{} banana\")", err),
+        };
     }
 }
 
-impl Display for Program<'_, '_> {
+impl Display for Program<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.statement)
     }
