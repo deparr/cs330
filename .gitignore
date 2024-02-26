@@ -3,5 +3,7 @@ node_modules/
 bun.lockb
 *.tar
 *.zip
+# imagine coding on windows :sadge:
+*.exe
 submission-output
 cs330-submit.rkt
