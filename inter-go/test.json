@@ -1,36 +1,72 @@
 {
   "type": "Program",
   "start": 0,
-  "end": 21,
+  "end": 28,
   "body": [
     {
-      "type": "ExpressionStatement",
+      "type": "VariableDeclaration",
       "start": 0,
       "end": 19,
-      "expression": {
-        "type": "ConditionalExpression",
-        "start": 0,
-        "end": 19,
-        "test": {
-          "type": "Literal",
-          "start": 0,
-          "end": 4,
-          "value": true,
-          "raw": "true"
-        },
-        "consequent": {
-          "type": "Literal",
-          "start": 7,
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "start": 4,
           "end": 11,
-          "value": true,
-          "raw": "true"
+          "id": {
+            "type": "Identifier",
+            "start": 4,
+            "end": 5,
+            "name": "x"
+          },
+          "init": {
+            "type": "Literal",
+            "start": 8,
+            "end": 11,
+            "value": 100,
+            "raw": "100"
+          }
         },
-        "alternate": {
-          "type": "Literal",
-          "start": 14,
+        {
+          "type": "VariableDeclarator",
+          "start": 13,
           "end": 18,
-          "value": true,
-          "raw": "true"
+          "id": {
+            "type": "Identifier",
+            "start": 13,
+            "end": 14,
+            "name": "y"
+          },
+          "init": {
+            "type": "Literal",
+            "start": 17,
+            "end": 18,
+            "value": 2,
+            "raw": "2"
+          }
+        }
+      ],
+      "kind": "let"
+    },
+    {
+      "type": "ExpressionStatement",
+      "start": 21,
+      "end": 26,
+      "expression": {
+        "type": "BinaryExpression",
+        "start": 21,
+        "end": 26,
+        "left": {
+          "type": "Identifier",
+          "start": 21,
+          "end": 22,
+          "name": "x"
+        },
+        "operator": "+",
+        "right": {
+          "type": "Identifier",
+          "start": 25,
+          "end": 26,
+          "name": "y"
         }
       }
     }

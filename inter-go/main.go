@@ -22,14 +22,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	ast, err := ast.New(astMap)
+	prog, err := ast.New(astMap)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create ast: %s\n", err)
 		os.Exit(3)
 	}
 
-	fmt.Println(ast)
-	result, err := ast.Eval()
+	fmt.Println(prog)
+	result, err := prog.Eval(ast.EmptyEnv())
 	if err != nil {
 		fmt.Printf("(error \"%s banana\")\n", err)
 		return

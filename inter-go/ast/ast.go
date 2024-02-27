@@ -2,7 +2,6 @@ package ast
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -41,8 +40,9 @@ type jsonT map[string]any
 
 const (
 	// TYPES
-	NUMBER  = "number"
-	BOOLEAN = "boolean"
+	NUMBER   = "number"
+	BOOLEAN  = "boolean"
+	FUNCTION = "function"
 
 	// OPERATORS
 	PLUS  = "+"
@@ -79,6 +79,27 @@ func getNum(json jsonT, key string) int64 {
 type Value struct {
 	self any
 }
+type environ struct {
+	env map[string]Value
+}
+
+func EmptyEnv() environ {
+	return environ{env: make(map[string]Value)}
+}
+
+func (env environ) extend(newKey string, newValue Value) environ {
+	new := EmptyEnv()
+	for k, v := range env.env {
+		new.env[k] = v
+	}
+	new.env[newKey] = newValue
+	return new
+}
+
+func (env environ) lookup(ident string) (Value, bool) {
+	val, bound := env.env[ident]
+	return val, bound
+}
 
 func (val *Value) getType() string {
 	switch (*val).self.(type) {
@@ -107,7 +128,7 @@ func (v Value) String() string {
 }
 
 type expr interface {
-	Eval() (*Value, error)
+	Eval(env environ) (*Value, error)
 }
 
 // / Binary Expressions -------------------------------------
@@ -129,12 +150,12 @@ func newBinExpr(expr jsonT) *binExpr {
 	}
 }
 
-func (bx binExpr) Eval() (*Value, error) {
-	left, err := (*bx.lhs).Eval()
+func (bx binExpr) Eval(env environ) (*Value, error) {
+	left, err := (*bx.lhs).Eval(env)
 	if err != nil {
 		return nil, err
 	}
-	right, err := (*bx.rhs).Eval()
+	right, err := (*bx.rhs).Eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +164,6 @@ func (bx binExpr) Eval() (*Value, error) {
 	rightT := right.getType()
 
 	if leftT != NUMBER || rightT != NUMBER {
-		fmt.Fprintf(os.Stderr, "%s %s %s\n", leftT, rightT, bx.op)
 		return nil, fmt.Errorf("Got non-number operand in BinOp `%s`", bx.op)
 	}
 
@@ -205,8 +225,8 @@ func newUnaryExpr(expr jsonT) *unaryExpr {
 	return &unaryExpr{op, &arg}
 }
 
-func (ux *unaryExpr) Eval() (*Value, error) {
-	arg, err := (*ux.arg).Eval()
+func (ux *unaryExpr) Eval(env environ) (*Value, error) {
+	arg, err := (*ux.arg).Eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -263,8 +283,8 @@ func newLogicalExpr(expr jsonT) *logicalExpr {
 	}
 }
 
-func (lx *logicalExpr) Eval() (*Value, error) {
-	left, err := (*lx.lhs).Eval()
+func (lx *logicalExpr) Eval(env environ) (*Value, error) {
+	left, err := (*lx.lhs).Eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +312,7 @@ func (lx *logicalExpr) Eval() (*Value, error) {
 		return nil, fmt.Errorf("Unimplemented logical op: `%s`", lx.op)
 	}
 
-	right, err = (*lx.rhs).Eval()
+	right, err = (*lx.rhs).Eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -323,8 +343,8 @@ func newCondExpr(expr jsonT) *condExpr {
 	return &condExpr{&test, &cons, &altr}
 }
 
-func (cx *condExpr) Eval() (*Value, error) {
-	test, err := (*cx.test).Eval()
+func (cx *condExpr) Eval(env environ) (*Value, error) {
+	test, err := (*cx.test).Eval(env)
 	if err != nil {
 		return nil, err
 	}
@@ -334,14 +354,113 @@ func (cx *condExpr) Eval() (*Value, error) {
 	}
 
 	if test.getBool() {
-		return (*cx.cons).Eval()
+		return (*cx.cons).Eval(env)
 	}
 
-	return (*cx.altr).Eval()
+	return (*cx.altr).Eval(env)
 }
 
 func (cx condExpr) String() string {
 	return fmt.Sprintf("(conditional %s %s %s)", *cx.test, *cx.cons, *cx.altr)
+}
+
+type bindExpr struct {
+	binds []struct {
+		string
+		expr
+	}
+	body *expr
+}
+
+func newBindExpr(bind jsonT, rest []any) *bindExpr {
+	binds := make([]struct {
+		string
+		expr
+	}, 0, 3)
+
+	for _, dec := range getArr(bind, "declarations") {
+		decObj := dec.(map[string]any)
+		ident := getStr(getObj(decObj, "id"), "name")
+		init, _ := newExpr(getObj(decObj, "init"))
+		binds = append(binds, struct {
+			string
+			expr
+		}{ident, init})
+	}
+
+	if len(rest) < 1 {
+		panic("newBindExpr()::rest has zero len")
+	}
+
+	bodyObj := rest[0].(map[string]any)
+	var body expr
+	if getStr(bodyObj, "type") == "VariableDeclaration" {
+		body = newBindExpr(bodyObj, rest[1:])
+	} else {
+		body, _ = newExpr(bodyObj)
+	}
+
+	return &bindExpr{binds, &body}
+}
+
+func (bx bindExpr) String() string {
+	bindStrs := make([]string, len(bx.binds))
+	for i, bind := range bx.binds {
+		bindStrs[i] = fmt.Sprintf("[%s %s]", bind.string, bind.expr)
+	}
+	return fmt.Sprintf("(let %s %s)", strings.Join(bindStrs, " "), *bx.body)
+}
+
+func (bx *bindExpr) Eval(env environ) (*Value, error) {
+	for _, bind := range bx.binds {
+		boundValue, err := bind.expr.Eval(env)
+		if err != nil {
+			return nil, err
+		}
+
+		env = env.extend(bind.string, *boundValue)
+	}
+
+	return (*bx.body).Eval(env)
+}
+
+func newBlockExpr(body []any) expr {
+	if len(body) < 1 {
+		return nil
+	}
+
+	first := body[0].(map[string]any)
+	//first := body[0]
+	var resExpr expr
+	switch getStr(first, "type") {
+	case "VariableDeclaration":
+		resExpr = newBindExpr(first, body[1:])
+
+	case "ExpressionStatement":
+		fallthrough
+	case "ReturnStatement":
+		resExpr, _ = newExpr(first)
+	}
+
+	return resExpr
+}
+
+type refExpr struct {
+	string
+}
+
+func (rx *refExpr) Eval(env environ) (*Value, error) {
+	val, bound := env.lookup(rx.string)
+	if !bound {
+		return nil, fmt.Errorf("Unbound identifier: `%s`", rx.string)
+	}
+
+	return &val, nil
+}
+
+func (rx refExpr) String() string {
+	//return fmt.Sprintf("(ref %s)", rx.string)
+	return rx.string
 }
 
 // / Literal Expressions ------------------------------------
@@ -368,7 +487,7 @@ func newLitExpr(expr jsonT) *litExpr {
 	return &litExpr{val, valType}
 }
 
-func (cx *litExpr) Eval() (*Value, error) {
+func (cx *litExpr) Eval(env environ) (*Value, error) {
 	return &Value{self: cx.val}, nil
 }
 
@@ -380,34 +499,37 @@ func (lx litExpr) String() string {
 }
 
 // / All Expressions ----------------------------------------
+// TODO: dont ignore errors
 func newExpr(json jsonT) (expr, error) {
 	exprType := json["type"].(string)
-	var newExpr expr
+	var resExpr expr
 	switch exprType {
 	case "UnaryExpression":
-		newExpr = newUnaryExpr(json)
+		resExpr = newUnaryExpr(json)
 	case "BinaryExpression":
-		newExpr = newBinExpr(json)
+		resExpr = newBinExpr(json)
 	case "LogicalExpression":
-		newExpr = newLogicalExpr(json)
+		resExpr = newLogicalExpr(json)
 	case "ConditionalExpression":
-		newExpr = newCondExpr(json)
+		resExpr = newCondExpr(json)
 	case "Literal":
-		newExpr = newLitExpr(json)
+		resExpr = newLitExpr(json)
+	case "Identifier":
+		resExpr = &refExpr{getStr(json, "name")}
+	case "ExpressionStatement":
+		resExpr, _ = newExpr(getObj(json, "expression"))
+	case "ReturnStatement":
+		resExpr, _ = newExpr(getObj(json, "argument"))
 	default:
 		return nil, fmt.Errorf("Unknown type in newExpr(): %s", exprType)
 	}
 
-	return newExpr, nil
+	return resExpr, nil
 }
 
 func New(json jsonT) (expr, error) {
 	body := json["body"].([]any)
-	// i := 0
-	// for i < len(body) {
-	// }
 
-	first := body[0].(map[string]any)
-	first = getObj(first, "expression")
-	return newExpr(first)
+	prog := newBlockExpr(body)
+	return prog, nil
 }
