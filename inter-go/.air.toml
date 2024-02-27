@@ -4,11 +4,11 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = []
-  bin = "V:/.local/bin/bat.exe test.json | bin/inter.exe"
+  full_bin = "cat test.json | bin/inter"
   #full_bin = "acorn --ecma2024 test.js | bin/inter.exe"
   #bin = "/usr/bin/cat test.json | bin/inter"
-  pre_cmd = ["acorn.cmd --ecma2024 test.js > test.json"]
-  cmd = "go build -o ./bin/inter.exe ."
+  pre_cmd = ["acorn --ecma2024 test.js > test.json"]
+  cmd = "go build -o ./bin/inter ."
   #cmd = "go build -o ./bin/inter ."
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]

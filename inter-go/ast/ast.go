@@ -1,5 +1,7 @@
 package ast
 
+// TODO: split this into multiple files, rip
+
 import (
 	"fmt"
 	"strconv"
@@ -79,6 +81,17 @@ func getNum(json jsonT, key string) int64 {
 type Value struct {
 	self any
 }
+
+type fnValue struct {
+	env  environ
+	arg  string
+	body *expr
+}
+
+func (fn fnValue) String() string {
+	return "(function)"
+}
+
 type environ struct {
 	env map[string]Value
 }
@@ -107,6 +120,8 @@ func (val *Value) getType() string {
 		return BOOLEAN
 	case int64:
 		return NUMBER
+	case fnValue:
+		return FUNCTION
 	default:
 		return "unknown"
 	}
@@ -121,10 +136,15 @@ func (val *Value) getBool() bool {
 }
 
 func (v Value) String() string {
-	if v.getType() == NUMBER {
+	_type := v.getType()
+	if _type == NUMBER {
 		return fmt.Sprintf("(number %d)", v.getNumber())
+	} else if _type == BOOLEAN {
+		return fmt.Sprintf("(boolean %t)", v.getBool())
+	} else if _type == FUNCTION {
+		return "(function)"
 	}
-	return fmt.Sprintf("(boolean %t)", v.getBool())
+	return _type
 }
 
 type expr interface {
@@ -463,6 +483,67 @@ func (rx refExpr) String() string {
 	return rx.string
 }
 
+// / Function Expressions -----------------------------------
+type fnExpr struct {
+	arg  string
+	body *expr
+}
+
+func newFnExpr(expr jsonT) *fnExpr {
+	params := getArr(expr, "params")
+	var arg string = ""
+	if len(params) > 0 {
+		arg = getStr((params[0].(map[string]any)), "name")
+	}
+	body, _ := newExpr(getObj(expr, "body"))
+
+	return &fnExpr{arg, &body}
+}
+
+func (fx fnExpr) Eval(env environ) (*Value, error) {
+	return &Value{fnValue{env, fx.arg, fx.body}}, nil
+}
+
+func (fx fnExpr) String() string {
+	return fmt.Sprintf("(%s) %s", fx.arg, *fx.body)
+}
+
+// / Call Expressions ---------------------------------------
+type callExpr struct {
+	callee *expr
+	arg    *expr
+}
+
+func newCallExpr(expr jsonT) *callExpr {
+	callee, _ := newExpr(getObj(expr, "callee"))
+	arg, _ := newExpr(getArr(expr, "arguments")[0].(map[string]any))
+
+	return &callExpr{&callee, &arg}
+}
+
+func (cx callExpr) String() string {
+	return fmt.Sprintf("(%s %s)", *cx.callee, *cx.arg)
+}
+
+func (cx callExpr) Eval(env environ) (*Value, error) {
+	fnVal, err := (*cx.callee).Eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if fnVal.getType() != FUNCTION {
+		return nil, fmt.Errorf("`%s` is not callable", fnVal.getType())
+	}
+	// I really just wish I could shadow vars in go
+	fn := fnVal.self.(fnValue)
+	argVal, err := (*cx.arg).Eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*fn.body).Eval(env.extend(fn.arg, *argVal))
+}
+
 // / Literal Expressions ------------------------------------
 type litExpr struct {
 	val     any
@@ -512,6 +593,12 @@ func newExpr(json jsonT) (expr, error) {
 		resExpr = newLogicalExpr(json)
 	case "ConditionalExpression":
 		resExpr = newCondExpr(json)
+	case "FunctionExpression":
+		resExpr = newFnExpr(json)
+	case "CallExpression":
+		resExpr = newCallExpr(json)
+	case "BlockStatement":
+		resExpr = newBlockExpr(getArr(json, "body"))
 	case "Literal":
 		resExpr = newLitExpr(json)
 	case "Identifier":

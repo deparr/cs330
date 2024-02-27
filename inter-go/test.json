@@ -1,17 +1,17 @@
 {
   "type": "Program",
   "start": 0,
-  "end": 28,
+  "end": 91,
   "body": [
     {
       "type": "VariableDeclaration",
       "start": 0,
-      "end": 19,
+      "end": 10,
       "declarations": [
         {
           "type": "VariableDeclarator",
           "start": 4,
-          "end": 11,
+          "end": 9,
           "id": {
             "type": "Identifier",
             "start": 4,
@@ -21,27 +21,101 @@
           "init": {
             "type": "Literal",
             "start": 8,
-            "end": 11,
-            "value": 100,
-            "raw": "100"
+            "end": 9,
+            "value": 5,
+            "raw": "5"
           }
-        },
+        }
+      ],
+      "kind": "let"
+    },
+    {
+      "type": "VariableDeclaration",
+      "start": 11,
+      "end": 82,
+      "declarations": [
         {
           "type": "VariableDeclarator",
-          "start": 13,
-          "end": 18,
+          "start": 15,
+          "end": 82,
           "id": {
             "type": "Identifier",
-            "start": 13,
-            "end": 14,
-            "name": "y"
+            "start": 15,
+            "end": 16,
+            "name": "f"
           },
           "init": {
-            "type": "Literal",
-            "start": 17,
-            "end": 18,
-            "value": 2,
-            "raw": "2"
+            "type": "FunctionExpression",
+            "start": 19,
+            "end": 82,
+            "id": null,
+            "expression": false,
+            "generator": false,
+            "async": false,
+            "params": [
+              {
+                "type": "Identifier",
+                "start": 29,
+                "end": 30,
+                "name": "y"
+              }
+            ],
+            "body": {
+              "type": "BlockStatement",
+              "start": 33,
+              "end": 82,
+              "body": [
+                {
+                  "type": "VariableDeclaration",
+                  "start": 45,
+                  "end": 56,
+                  "declarations": [
+                    {
+                      "type": "VariableDeclarator",
+                      "start": 49,
+                      "end": 55,
+                      "id": {
+                        "type": "Identifier",
+                        "start": 49,
+                        "end": 50,
+                        "name": "x"
+                      },
+                      "init": {
+                        "type": "Literal",
+                        "start": 53,
+                        "end": 55,
+                        "value": 10,
+                        "raw": "10"
+                      }
+                    }
+                  ],
+                  "kind": "let"
+                },
+                {
+                  "type": "ReturnStatement",
+                  "start": 67,
+                  "end": 80,
+                  "argument": {
+                    "type": "BinaryExpression",
+                    "start": 74,
+                    "end": 79,
+                    "left": {
+                      "type": "Identifier",
+                      "start": 74,
+                      "end": 75,
+                      "name": "x"
+                    },
+                    "operator": "+",
+                    "right": {
+                      "type": "Identifier",
+                      "start": 78,
+                      "end": 79,
+                      "name": "y"
+                    }
+                  }
+                }
+              ]
+            }
           }
         }
       ],
@@ -49,25 +123,27 @@
     },
     {
       "type": "ExpressionStatement",
-      "start": 21,
-      "end": 26,
+      "start": 84,
+      "end": 90,
       "expression": {
-        "type": "BinaryExpression",
-        "start": 21,
-        "end": 26,
-        "left": {
+        "type": "CallExpression",
+        "start": 84,
+        "end": 90,
+        "callee": {
           "type": "Identifier",
-          "start": 21,
-          "end": 22,
-          "name": "x"
+          "start": 84,
+          "end": 85,
+          "name": "f"
         },
-        "operator": "+",
-        "right": {
-          "type": "Identifier",
-          "start": 25,
-          "end": 26,
-          "name": "y"
-        }
+        "arguments": [
+          {
+            "type": "Identifier",
+            "start": 87,
+            "end": 88,
+            "name": "x"
+          }
+        ],
+        "optional": false
       }
     }
   ],

@@ -28,7 +28,6 @@ func main() {
 		os.Exit(3)
 	}
 
-	fmt.Println(prog)
 	result, err := prog.Eval(ast.EmptyEnv())
 	if err != nil {
 		fmt.Printf("(error \"%s banana\")\n", err)
