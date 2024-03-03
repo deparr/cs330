@@ -52,7 +52,7 @@ The string and corresponding instructions:
 
 ---
 ## C++ Public Cast
-Using C++ templates it is possible to gain access to a classes private data and function members, effectively ruining encapsulation.
+Using C++ templates it is possible to gain access to a class' private data and function members, effectively ruining encapsulation.
 I originally saw this code in [this youtube video](https://www.youtube.com/watch?v=SmlLdd1Q2V8&t=488s).
 I probably won't be able to explain it super well since it goes a little over my head, but here we go:
 
