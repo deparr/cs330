@@ -14,11 +14,11 @@ Outputs:
 Hello World!
 
 ```
-_* using gcc-v12.2.0 and clang-v15.0.7 on glibc void-linux-x86-64. Couldn't get it working on windows with mingw. Might work on mac. Will work on cs lab machines_  
+_* using gcc-v12.2.0 and clang-v15.0.7 on glibc void-linux-x86-64. Windows doesn't have the same syscalls. Might work on mac. Will work on cs lab machines_  
 
 I found this out a while ago when I was trying to get the generated object code of a single function and `gcc` errored with 'undefined reference to main'.
 I was curious that it only said 'undefined reference' instead of something like 'missing main function'.
-I was super surprised when it compiled after adding `int main = 0;`, so I looked into it and discovered you can do ridiculous things like this.  
+I was super surprised when it compiled after adding `int main = 0;`, so I dug a little deeper and discovered you can do ridiculous things like this.  
 
 **dissasembly of main**
 ```
@@ -53,7 +53,7 @@ The string and corresponding instructions:
 ---
 ## C++ Public Cast
 Using C++ templates it is possible to gain access to a class' private data and function members, effectively ruining encapsulation.
-I originally saw this code in [this youtube video](https://www.youtube.com/watch?v=SmlLdd1Q2V8&t=488s).
+I originally saw this code in [this youtube video](https://www.youtube.com/watch?v=SmlLdd1Q2V8&t=488s).  
 I probably won't be able to explain it super well since it goes a little over my head, but here we go:
 
 ```cpp
@@ -71,6 +71,8 @@ int main() {
 This code does not compile because `x` is clearly a private member of `C`, which main does not have access to.
 However, using some template metaprogramming we can trick the compiler into saving a reference to `x` which we can access later.
 This is possible because access modifers are **ignored** during explicit instantiations.
+
+**requires std=C++17 or later**
 
 ```cpp
 #include <cstdio>

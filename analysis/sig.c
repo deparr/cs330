@@ -6,11 +6,11 @@
 #include <unistd.h>
 
 void catch_sigsev(int signum) {
-	puts("Caught SIGSEV!");
 	sigset_t mask;
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGSEGV);
 	sigprocmask(SIG_SETMASK, &mask, NULL);
+	puts("Caught SIGSEGV!");
 }
 
 void catch_sigint(int signum) {
