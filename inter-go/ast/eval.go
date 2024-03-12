@@ -2,7 +2,7 @@ package ast
 
 import "fmt"
 
-// really should rethink type aei
+// TODO: this type is bad, should be an interface probably
 type Value struct {
 	self any
 }
@@ -13,18 +13,18 @@ type fnValue struct {
 	body *expr
 }
 
-type void struct{}
+type voidValue struct{}
 
 func (val *Value) getType() string {
 	switch (*val).self.(type) {
 	case bool:
-		return BOOLEAN
+		return boolean
 	case int64:
-		return NUMBER
+		return number
 	case fnValue:
-		return FUNCTION
-	case void:
-		return VOID
+		return funciton
+	case voidValue:
+		return void
 	default:
 		return "unknown"
 	}
@@ -40,11 +40,11 @@ func (val *Value) getBool() bool {
 
 func (v Value) String() string {
 	_type := v.getType()
-	if _type == NUMBER {
+	if _type == number {
 		return fmt.Sprintf("(number %d)", v.getNumber())
-	} else if _type == BOOLEAN {
+	} else if _type == boolean {
 		return fmt.Sprintf("(boolean %t)", v.getBool())
-	} else if _type == FUNCTION {
+	} else if _type == funciton {
 		return "(function)"
 	}
 	return _type
@@ -55,28 +55,38 @@ func (fn fnValue) String() string {
 }
 
 type environ struct {
-	env map[string]Value
+	env map[string]int
 }
 
 func EmptyEnv() environ {
-	return environ{env: make(map[string]Value)}
+	return environ{env: make(map[string]int)}
 }
 
-func (env environ) extend(newKey string, newValue Value) environ {
+func (env environ) extend(newKey string, newValue Value, heap *[]Value) environ {
 	new := EmptyEnv()
 	for k, v := range env.env {
 		new.env[k] = v
 	}
-	new.env[newKey] = newValue
+	*heap = append(*heap, newValue)
+	new.env[newKey] = len(*heap) - 1
 	return new
 }
 
-func (env environ) lookup(ident string) (Value, bool) {
-	val, bound := env.env[ident]
-	return val, bound
+func (env environ) lookup(ident string, heap *[]Value) (Value, bool, int) {
+	addr, bound := env.env[ident]
+	var val Value
+	if addr < len(*heap) {
+		val = (*heap)[addr]
+	}
+	return val, bound, addr
 }
 
-func (bx binExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (prog program) Eval() (*Value, error) {
+	env, heap := EmptyEnv(), []Value{}
+	return prog.body.Eval(env, &heap)
+}
+
+func (bx binExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	left, err := (*bx.lhs).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -89,7 +99,7 @@ func (bx binExpr) Eval(env environ, heap []Value) (*Value, error) {
 	leftT := left.getType()
 	rightT := right.getType()
 
-	if leftT != NUMBER || rightT != NUMBER {
+	if leftT != number || rightT != number {
 		return nil, fmt.Errorf("Got non-number operand in BinOp `%s`", bx.op)
 	}
 
@@ -98,28 +108,28 @@ func (bx binExpr) Eval(env environ, heap []Value) (*Value, error) {
 
 	var result any
 	switch bx.op {
-	case PLUS:
+	case plus:
 		result = leftNum + rightNum
-	case MINUS:
+	case minus:
 		result = leftNum - rightNum
-	case MUL:
+	case mul:
 		result = leftNum * rightNum
-	case DIV:
+	case div:
 		if rightNum == 0 {
 			return nil, fmt.Errorf("Division by zero")
 		}
 		result = leftNum / rightNum
-	case EQL:
+	case eql:
 		result = leftNum == rightNum
-	case NEQL:
+	case neql:
 		result = leftNum != rightNum
-	case LT:
+	case lt:
 		result = leftNum < rightNum
-	case LTE:
+	case lte:
 		result = leftNum <= rightNum
-	case GT:
+	case gt:
 		result = leftNum > rightNum
-	case GTE:
+	case gte:
 		result = leftNum >= rightNum
 	default:
 		return nil, fmt.Errorf("Unknown BinOp: %s", bx.op)
@@ -128,7 +138,7 @@ func (bx binExpr) Eval(env environ, heap []Value) (*Value, error) {
 	return &Value{self: result}, nil
 }
 
-func (ux *unaryExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (ux *unaryExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	arg, err := (*ux.arg).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -137,14 +147,14 @@ func (ux *unaryExpr) Eval(env environ, heap []Value) (*Value, error) {
 	argT := arg.getType()
 	var result any
 	switch ux.op {
-	case NOT:
-		if argT != BOOLEAN {
+	case not:
+		if argT != boolean {
 			return nil, fmt.Errorf("Expected bool operand with `!` operator, got: %s", argT)
 		}
 		result = !arg.getBool()
 
-	case PLUS:
-		if argT != NUMBER {
+	case plus:
+		if argT != number {
 			return nil, fmt.Errorf("Expected number operand with unary `+` oeprator, got %s", argT)
 		}
 		if arg.getNumber() < 0 {
@@ -153,8 +163,8 @@ func (ux *unaryExpr) Eval(env environ, heap []Value) (*Value, error) {
 			result = arg.getNumber()
 		}
 
-	case MINUS:
-		if argT != NUMBER {
+	case minus:
+		if argT != number {
 			return nil, fmt.Errorf("Expected number operand with unary `-` oeprator, got %s", argT)
 		}
 		result = arg.getNumber() * 1
@@ -163,13 +173,13 @@ func (ux *unaryExpr) Eval(env environ, heap []Value) (*Value, error) {
 	return &Value{self: result}, nil
 }
 
-func (lx *logicalExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (lx *logicalExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	left, err := (*lx.lhs).Eval(env, heap)
 	if err != nil {
 		return nil, err
 	}
 
-	if left.getType() != BOOLEAN {
+	if left.getType() != boolean {
 		return nil, fmt.Errorf("Got non-bool operand in LogOp `%s`", lx.op)
 	}
 
@@ -180,11 +190,11 @@ func (lx *logicalExpr) Eval(env environ, heap []Value) (*Value, error) {
 	)
 	// Short circuits
 	switch lx.op {
-	case OR:
+	case or:
 		if leftBool {
 			return &Value{self: true}, nil
 		}
-	case AND:
+	case and:
 		if !leftBool {
 			return &Value{self: false}, nil
 		}
@@ -196,7 +206,7 @@ func (lx *logicalExpr) Eval(env environ, heap []Value) (*Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	if right.getType() != BOOLEAN {
+	if right.getType() != boolean {
 		return nil, fmt.Errorf("Got non-bool operand in LogOp: `%s`", lx.op)
 	}
 
@@ -204,13 +214,13 @@ func (lx *logicalExpr) Eval(env environ, heap []Value) (*Value, error) {
 	return &Value{self: rightBool}, nil
 }
 
-func (cx *condExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (cx *condExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	test, err := (*cx.test).Eval(env, heap)
 	if err != nil {
 		return nil, err
 	}
 
-	if test.getType() != BOOLEAN {
+	if test.getType() != boolean {
 		return nil, fmt.Errorf("Non bool in conditonal")
 	}
 
@@ -221,21 +231,21 @@ func (cx *condExpr) Eval(env environ, heap []Value) (*Value, error) {
 	return (*cx.altr).Eval(env, heap)
 }
 
-func (bx *bindExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (bx *bindExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	for _, bind := range bx.binds {
 		boundValue, err := bind.expr.Eval(env, heap)
 		if err != nil {
 			return nil, err
 		}
 
-		env = env.extend(bind.string, *boundValue)
+		env = env.extend(bind.string, *boundValue, heap)
 	}
 
 	return (*bx.body).Eval(env, heap)
 }
 
-func (rx *refExpr) Eval(env environ, heap []Value) (*Value, error) {
-	val, bound := env.lookup(rx.string)
+func (rx refExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+	val, bound, _ := env.lookup(rx.string, heap)
 	if !bound {
 		return nil, fmt.Errorf("Unbound identifier: `%s`", rx.string)
 	}
@@ -243,17 +253,17 @@ func (rx *refExpr) Eval(env environ, heap []Value) (*Value, error) {
 	return &val, nil
 }
 
-func (fx fnExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (fx fnExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &Value{fnValue{env, fx.arg, fx.body}}, nil
 }
 
-func (cx callExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (cx callExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	fnVal, err := (*cx.callee).Eval(env, heap)
 	if err != nil {
 		return nil, err
 	}
 
-	if fnVal.getType() != FUNCTION {
+	if fnVal.getType() != funciton {
 		return nil, fmt.Errorf("`%s` is not callable", fnVal.getType())
 	}
 	// I really just wish I could shadow vars in go
@@ -263,9 +273,27 @@ func (cx callExpr) Eval(env environ, heap []Value) (*Value, error) {
 		return nil, err
 	}
 
-	return (*fn.body).Eval(env.extend(fn.arg, *argVal), heap)
+	return (*fn.body).Eval(env.extend(fn.arg, *argVal, heap), heap)
 }
 
-func (cx *litExpr) Eval(env environ, heap []Value) (*Value, error) {
+func (cx *litExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &Value{self: cx.val}, nil
+}
+
+func (ax *assignExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+	switch ax.op {
+	case assign:
+		_, bound, addr := env.lookup(ax.ident, heap)
+		if !bound {
+			return nil, fmt.Errorf("Attempt to assign unbound identifer: `%s`", ax.ident)
+		}
+
+		rhs, err := ax.rhs.Eval(env, heap)
+		if err != nil {
+			return nil, err
+		}
+
+		(*heap)[addr] = *rhs
+	}
+	return &Value{self: voidValue{}}, nil
 }

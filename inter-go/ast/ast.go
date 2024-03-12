@@ -105,6 +105,8 @@ func newBindExpr(bind jsonT, rest []any) *bindExpr {
 		panic("newBindExpr()::rest has zero len")
 	}
 
+	fmt.Println(rest)
+
 	bodyObj := rest[0].(map[string]any)
 	var body expr
 	if getStr(bodyObj, "type") == "VariableDeclaration" {
@@ -137,6 +139,9 @@ func newBlockExpr(body []any) expr {
 	return resExpr
 }
 
+// func newTopLevelExpr(body []any) expr {
+// }
+
 func newFnExpr(expr jsonT) *fnExpr {
 	params := getArr(expr, "params")
 	var arg string = ""
@@ -164,13 +169,21 @@ func newLitExpr(expr jsonT) *litExpr {
 
 	if strings.ContainsAny(raw, "0123456789") {
 		val, _ = strconv.ParseInt(raw, 10, 64)
-		valType = NUMBER
+		valType = number
 	} else {
 		val, _ = strconv.ParseBool(raw)
-		valType = BOOLEAN
+		valType = boolean
 	}
 
 	return &litExpr{val, valType}
+}
+
+func newAssignExpr(expr jsonT) *assignExpr {
+	op := getStr(expr, "operator")
+	lhs, _ := newExpr(getObj(expr, "left"))
+	ident := lhs.(*refExpr).string
+	rhs, _ := newExpr(getObj(expr, "right"))
+	return &assignExpr{op, ident, rhs}
 }
 
 // / All Expressions ----------------------------------------
@@ -193,6 +206,8 @@ func newExpr(json jsonT) (expr, error) {
 		resExpr = newCallExpr(json)
 	case "BlockStatement":
 		resExpr = newBlockExpr(getArr(json, "body"))
+	case "AssignmentExpression":
+		resExpr = newAssignExpr(json)
 	case "Literal":
 		resExpr = newLitExpr(json)
 	case "Identifier":
@@ -208,9 +223,13 @@ func newExpr(json jsonT) (expr, error) {
 	return resExpr, nil
 }
 
-func New(json jsonT) (expr, error) {
+type program struct {
+	body expr
+}
+
+func New(json jsonT) (program, error) {
 	body := json["body"].([]any)
 
 	prog := newBlockExpr(body)
-	return prog, nil
+	return program{prog}, nil
 }

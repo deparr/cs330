@@ -1,7 +1,11 @@
-let x = 5;
-let f = function( y ) {
-          let x = 10;
-          return x + y;
-}
+let x = 0;
 
-f( x )
+let set = function( y ) {
+
+  return x = y;
+
+};
+
+set( 10 );
+
+x

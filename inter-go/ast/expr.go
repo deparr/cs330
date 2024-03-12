@@ -8,29 +8,30 @@ import (
 
 const (
 	// TYPES
-	NUMBER   = "number"
-	BOOLEAN  = "boolean"
-	FUNCTION = "function"
-	VOID     = "void"
+	number   = "number"
+	boolean  = "boolean"
+	funciton = "function"
+	void     = "void"
 
 	// OPERATORS
-	PLUS  = "+"
-	MINUS = "-"
-	MUL   = "*"
-	DIV   = "/"
-	AND   = "&&"
-	OR    = "||"
-	EQL   = "=="
-	NEQL  = "!="
-	LT    = "<"
-	GT    = ">"
-	LTE   = "<="
-	GTE   = ">="
-	NOT   = "!"
+	plus  = "+"
+	minus = "-"
+	mul   = "*"
+	div   = "/"
+	and   = "&&"
+	or    = "||"
+	eql   = "=="
+	neql  = "!="
+	lt    = "<"
+	gt    = ">"
+	lte   = "<="
+	gte   = ">="
+	not   = "!"
+	assign = "="
 )
 
 type expr interface {
-	Eval(env environ, heap []Value) (*Value, error)
+	Eval(env environ, heap *[]Value) (*Value, error)
 }
 
 // / Binary Expressions -------------------------------------
@@ -92,13 +93,13 @@ type litExpr struct {
 
 type assignExpr struct {
 	op    string
-	left  expr
-	right expr
+	ident  string
+	rhs expr
 }
 
 func (bx binExpr) String() string {
 	var _type string
-	if bx.op == PLUS || bx.op == MINUS || bx.op == DIV || bx.op == MUL {
+	if bx.op == plus || bx.op == minus || bx.op == div || bx.op == mul {
 		_type = "arithmetic"
 	} else {
 		_type = "relational"
@@ -140,8 +141,16 @@ func (cx callExpr) String() string {
 }
 
 func (lx litExpr) String() string {
-	if lx.valType == NUMBER {
+	if lx.valType == number {
 		return fmt.Sprintf("(%s %d)", lx.valType, lx.val.(int64))
 	}
 	return fmt.Sprintf("(%s %t)", lx.valType, lx.val.(bool))
+}
+
+func (ax assignExpr) String() string {
+	return fmt.Sprintf("(%s %s %s)", ax.ident, ax.op, ax.rhs)
+}
+
+func (prog program) String() string {
+	return fmt.Sprintf("%s", prog.body)
 }
