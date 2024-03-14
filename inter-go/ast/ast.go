@@ -1,7 +1,5 @@
 package ast
 
-// TODO: split this into multiple files, rip
-
 import (
 	"fmt"
 	"strconv"
@@ -85,7 +83,7 @@ func newCondExpr(expr jsonT) *condExpr {
 	return &condExpr{&test, &cons, &altr}
 }
 
-func newBindExpr(bind jsonT, rest []any) *bindExpr {
+func newBindExpr(bind jsonT) *bindExpr {
 	binds := make([]struct {
 		string
 		expr
@@ -101,46 +99,44 @@ func newBindExpr(bind jsonT, rest []any) *bindExpr {
 		}{ident, init})
 	}
 
-	if len(rest) < 1 {
-		panic("newBindExpr()::rest has zero len")
-	}
-
-	fmt.Println(rest)
-
-	bodyObj := rest[0].(map[string]any)
-	var body expr
-	if getStr(bodyObj, "type") == "VariableDeclaration" {
-		body = newBindExpr(bodyObj, rest[1:])
-	} else {
-		body, _ = newExpr(bodyObj)
-	}
-
-	return &bindExpr{binds, &body}
+	return &bindExpr{binds}
 }
 
-func newBlockExpr(body []any) expr {
+func newBlockExpr(body []any) *blockExpr {
 	if len(body) < 1 {
+		// this is shite
 		return nil
 	}
 
-	first := body[0].(map[string]any)
-	//first := body[0]
-	var resExpr expr
-	switch getStr(first, "type") {
-	case "VariableDeclaration":
-		resExpr = newBindExpr(first, body[1:])
+	exprs := make([]expr, len(body))
+	var nextExpr expr
+	var err error
+	for i, expr := range body {
+		nextExpr, err = newExpr(expr.(map[string]any))
+		if err != nil {
+			panic(err.Error())
+		}
+		exprs[i] = nextExpr
 
-	case "ExpressionStatement":
-		fallthrough
-	case "ReturnStatement":
-		resExpr, _ = newExpr(first)
 	}
 
-	return resExpr
-}
+	return &blockExpr{exprs}
 
-// func newTopLevelExpr(body []any) expr {
-// }
+	// first := body[0].(map[string]any)
+	//first := body[0]
+	// var resExpr expr
+	// switch getStr(first, "type") {
+	// case "VariableDeclaration":
+	// 	resExpr = newBindExpr(first, body[1:])
+	//
+	// case "ExpressionStatement":
+	// 	fallthrough
+	// case "ReturnStatement":
+	// 	resExpr, _ = newExpr(first)
+	// }
+	//
+	// return resExpr
+}
 
 func newFnExpr(expr jsonT) *fnExpr {
 	params := getArr(expr, "params")
@@ -204,6 +200,8 @@ func newExpr(json jsonT) (expr, error) {
 		resExpr = newFnExpr(json)
 	case "CallExpression":
 		resExpr = newCallExpr(json)
+	case "VariableDeclaration":
+		resExpr = newBindExpr(json)
 	case "BlockStatement":
 		resExpr = newBlockExpr(getArr(json, "body"))
 	case "AssignmentExpression":
@@ -224,12 +222,20 @@ func newExpr(json jsonT) (expr, error) {
 }
 
 type program struct {
-	body expr
+	body []expr
 }
 
-func New(json jsonT) (program, error) {
+func New(json jsonT) (*program, error) {
 	body := json["body"].([]any)
+	exprs := make([]expr, 0, 5)
+	for _, expr := range body {
+		newExpr, err := newExpr(expr.(map[string]any))
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, newExpr)
+	}
 
-	prog := newBlockExpr(body)
-	return program{prog}, nil
+	// prog := newBlockExpr(body)
+	return &program{exprs}, nil
 }

@@ -83,10 +83,19 @@ func (env environ) lookup(ident string, heap *[]Value) (Value, bool, int) {
 
 func (prog program) Eval() (*Value, error) {
 	env, heap := EmptyEnv(), []Value{}
-	return prog.body.Eval(env, &heap)
+	var ret *Value
+	var err error
+	for _, stat := range prog.body {
+		fmt.Printf("Evaling: %s with env/heap %v/%s\n", stat, env.env, heap)
+		ret, err = stat.Eval(&env, &heap)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
 }
 
-func (bx binExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (bx binExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	left, err := (*bx.lhs).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -138,7 +147,7 @@ func (bx binExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &Value{self: result}, nil
 }
 
-func (ux *unaryExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (ux *unaryExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	arg, err := (*ux.arg).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -173,7 +182,7 @@ func (ux *unaryExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &Value{self: result}, nil
 }
 
-func (lx *logicalExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (lx *logicalExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	left, err := (*lx.lhs).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -214,7 +223,7 @@ func (lx *logicalExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &Value{self: rightBool}, nil
 }
 
-func (cx *condExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (cx *condExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	test, err := (*cx.test).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -231,20 +240,20 @@ func (cx *condExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return (*cx.altr).Eval(env, heap)
 }
 
-func (bx *bindExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (bx *bindExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	for _, bind := range bx.binds {
 		boundValue, err := bind.expr.Eval(env, heap)
 		if err != nil {
 			return nil, err
 		}
 
-		env = env.extend(bind.string, *boundValue, heap)
+		*env = env.extend(bind.string, *boundValue, heap)
 	}
 
-	return (*bx.body).Eval(env, heap)
+	return &Value{voidValue{}}, nil
 }
 
-func (rx refExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (rx refExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	val, bound, _ := env.lookup(rx.string, heap)
 	if !bound {
 		return nil, fmt.Errorf("Unbound identifier: `%s`", rx.string)
@@ -253,11 +262,11 @@ func (rx refExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 	return &val, nil
 }
 
-func (fx fnExpr) Eval(env environ, heap *[]Value) (*Value, error) {
-	return &Value{fnValue{env, fx.arg, fx.body}}, nil
+func (fx fnExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
+	return &Value{fnValue{*env, fx.arg, fx.body}}, nil
 }
 
-func (cx callExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (cx callExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	fnVal, err := (*cx.callee).Eval(env, heap)
 	if err != nil {
 		return nil, err
@@ -273,14 +282,15 @@ func (cx callExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 		return nil, err
 	}
 
-	return (*fn.body).Eval(env.extend(fn.arg, *argVal, heap), heap)
+	newEnv := env.extend(fn.arg, *argVal, heap)
+	return (*fn.body).Eval(&newEnv, heap)
 }
 
-func (cx *litExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (cx *litExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	return &Value{self: cx.val}, nil
 }
 
-func (ax *assignExpr) Eval(env environ, heap *[]Value) (*Value, error) {
+func (ax *assignExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
 	switch ax.op {
 	case assign:
 		_, bound, addr := env.lookup(ax.ident, heap)
@@ -296,4 +306,17 @@ func (ax *assignExpr) Eval(env environ, heap *[]Value) (*Value, error) {
 		(*heap)[addr] = *rhs
 	}
 	return &Value{self: voidValue{}}, nil
+}
+
+func (bx blockExpr) Eval(env *environ, heap *[]Value) (*Value, error) {
+	var res *Value
+	var err error
+	for _, expr := range bx.exprs {
+		res, err = expr.Eval(env, heap)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return res, nil
 }

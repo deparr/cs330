@@ -31,7 +31,7 @@ const (
 )
 
 type expr interface {
-	Eval(env environ, heap *[]Value) (*Value, error)
+	Eval(env *environ, heap *[]Value) (*Value, error)
 }
 
 // / Binary Expressions -------------------------------------
@@ -66,7 +66,6 @@ type bindExpr struct {
 		string
 		expr
 	}
-	body *expr
 }
 
 type refExpr struct {
@@ -97,6 +96,10 @@ type assignExpr struct {
 	rhs expr
 }
 
+type blockExpr struct {
+	exprs []expr
+}
+
 func (bx binExpr) String() string {
 	var _type string
 	if bx.op == plus || bx.op == minus || bx.op == div || bx.op == mul {
@@ -124,11 +127,10 @@ func (bx bindExpr) String() string {
 	for i, bind := range bx.binds {
 		bindStrs[i] = fmt.Sprintf("[%s %s]", bind.string, bind.expr)
 	}
-	return fmt.Sprintf("(let %s %s)", strings.Join(bindStrs, " "), *bx.body)
+	return fmt.Sprintf("(let %s)", strings.Join(bindStrs, " "))
 }
 
 func (rx refExpr) String() string {
-	//return fmt.Sprintf("(ref %s)", rx.string)
 	return rx.string
 }
 
@@ -149,6 +151,14 @@ func (lx litExpr) String() string {
 
 func (ax assignExpr) String() string {
 	return fmt.Sprintf("(%s %s %s)", ax.ident, ax.op, ax.rhs)
+}
+
+func (bx blockExpr) String() string {
+	exprStrs := make([]string, len(bx.exprs))
+	for i, expr := range bx.exprs {
+		exprStrs[i] = fmt.Sprintf("%s", expr)
+	}
+	return fmt.Sprintf("(begin! %s)", strings.Join(exprStrs, " "))
 }
 
 func (prog program) String() string {
