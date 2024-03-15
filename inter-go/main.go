@@ -27,7 +27,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Unable to create ast: %s\n", err)
 		os.Exit(3)
 	}
-	fmt.Println(prog)
+	// fmt.Println(prog)
 
 	result, err := prog.Eval()
 	if err != nil {

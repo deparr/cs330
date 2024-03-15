@@ -1,11 +1,12 @@
-let x = 0;
-
-let set = function( y ) {
-
-  return x = y;
-
+let c = function( x ) {
+  return function( m ) {
+    return m ? function( y ) {
+      return x;
+    } : function( y ) {
+      return (x = y);
+    }
+  }
 };
-
-set( 10 );
-
-x
+let o = c( 10 );
+o( false )( 15 );
+o( true )( 42 );

@@ -86,7 +86,7 @@ func (prog program) Eval() (*Value, error) {
 	var ret *Value
 	var err error
 	for _, stat := range prog.body {
-		fmt.Printf("Evaling: %s with env/heap %v/%s\n", stat, env.env, heap)
+		// fmt.Printf("Evaling: %s with env/heap %v/%s\n", stat, env.env, heap)
 		ret, err = stat.Eval(&env, &heap)
 		if err != nil {
 			return nil, err
