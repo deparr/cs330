@@ -23,19 +23,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	parser := types.NewParser()
-	parsedAst, err := parser.Parse(astMap)
+	_type, err := types.Parse(astMap)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	fmt.Println(parsedAst)
-
-	_type, err := types.Check(astMap)
-	if err != nil {
-		fmt.Printf("(error \"%s\")\n", err.Error())
+		fmt.Printf("(error \"%s <> banana\")\n", err.Error())
 		os.Exit(1)
 	}
 
-	fmt.Println(_type)
+	fmt.Printf("(type %s)\n",  _type)
 }

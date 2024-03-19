@@ -1,2 +1,1 @@
-(object [a 1]
-        [b #true])
+(fun (x : num) x)
