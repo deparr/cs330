@@ -1,14 +1,26 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+// I hate all of this
+// this code is shite
+// this is some of the worst code I have ever written
+
+type environ map[string]ast_t
 
 func Parse(json map[string]any) (ast_t, error) {
+	return parse(json, environ{})
+}
+
+func parse(json map[string]any, env environ) (ast_t, error) {
 	item_t := json["type"].(string)
 	if item_t != "list" && item_t != "symbol" {
 		return newLiteral(item_t)
 	} else if item_t == "symbol" {
-		// env lookup
-		panic("TODO: env lookup for symbol sexp passed to types.Parse()")
+		return env[json["value"].(string)], nil
 	}
 
 	var (
@@ -30,21 +42,22 @@ func Parse(json map[string]any) (ast_t, error) {
 		item_v = item["value"].(string)
 		switch item_v {
 		case "object":
-			ast, err = parseObjLit(items[i+1:])
+			ast, err = parseObjLit(items[i+1:], env)
 			if err != nil {
 				return nil, err
 			}
 			i++
 			obj_len := len((ast.(ast_obj)).Fields)
-			fmt.Println("NEXT AFTER OBJ", items[i+obj_len:])
 			i += obj_len
+
 		case "field":
-			obj, err := Parse(items[i+1].(map[string]any))
+			obj, err := parse(items[i+1].(map[string]any), env)
 			if err != nil {
 				return nil, err
 			}
-			if obj.Type() != object_t {
-				return nil, fmt.Errorf("'%s' type is not field-accessible", obj.Type())
+
+			if !strings.Contains(obj.Type(), "obj{") {
+				return nil, fmt.Errorf("'%s' type does not have field access", obj.Type())
 			}
 
 			ident := items[i+2].(map[string]any)
@@ -64,19 +77,97 @@ func Parse(json map[string]any) (ast_t, error) {
 
 		case "fun":
 			arg_l := (items[i+1].(map[string]any))["value"].([]any)
-			_ = (arg_l[0].(map[string].any))["value"].(string)
-			arg_type, err := newLiteral(arg_l[2].(string))
+			ident_str := (arg_l[0].(map[string]any))["value"].(string)
+			arg_type, err := newLiteral(arg_l[2].(map[string]any)["value"].(string))
 			if err != nil {
 				return nil, err
 			}
 
-			// env extend ??
-
-			body_type, err := Parse(items[i+2].(map[string]any))
+			old_type, was_bound := env[ident_str]
+			env[ident_str] = arg_type
+			body_type, err := parse(items[i+2].(map[string]any), env)
 			if err != nil {
 				return nil, err
 			}
+
+			if was_bound {
+				env[ident_str] = old_type
+			} else {
+				delete(env, ident_str)
+			}
+
 			return ast_func{arg_type, body_type}, nil
+
+		case "app":
+			fun, err := parse(items[i+1].(map[string]any), env)
+			if err != nil {
+				return nil, err
+
+			}
+
+			if !strings.Contains(fun.Type(), "func|") {
+				return nil, fmt.Errorf("`%s` type is not callable", fun.Type())
+			}
+
+			arg, err := parse(items[i+2].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+			fun_as_func := fun.(ast_func)
+
+			if arg.Type() != fun_as_func.Arg.Type() {
+				return nil, fmt.Errorf("function `%s` cannot accept arg of type: %s", fun, arg)
+			}
+
+			return fun_as_func.Ret, nil
+
+		case "let":
+			bind_l := (items[i+1].(map[string]any))["value"].([]any)
+			binds := make([]struct {
+				string
+				ast_t
+				bool
+			}, len(bind_l))
+			for i, bind := range bind_l {
+				bind_arg_l := bind.(map[string]any)
+				bind := bind_arg_l["value"].([]any)
+				ident := ((bind[0].(map[string]any))["value"]).(string)
+				bind_t, err := parse(bind[1].(map[string]any), env)
+				if err != nil {
+
+				}
+				binds[i] = struct {
+					string
+					ast_t
+					bool
+				}{ident, bind_t, false}
+			}
+
+			for i := range binds {
+				b := binds[i]
+				old_t, bound := env[b.string]
+				env[b.string] = b.ast_t
+				if bound {
+					binds[i].bool = true
+					binds[i].ast_t = old_t
+				}
+			}
+
+			body_t, err := parse(items[i+2].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+
+			// remap old env back
+			for _, b := range binds {
+				if b.bool {
+					env[b.string] = b.ast_t
+				} else {
+					delete(env, b.string)
+				}
+			}
+
+			return body_t, nil
 
 		case "+":
 			fallthrough
@@ -85,20 +176,20 @@ func Parse(json map[string]any) (ast_t, error) {
 		case "*":
 			fallthrough
 		case "/":
-			return parseBinOp(items[i+1:], item_v, number_t, number_t)
+			return parseBinOp(items[i+1:], item_v, number_t, number_t, env)
 
 		case "=":
 			fallthrough
 		case "<":
-			return parseBinOp(items[i+1:], item_v, number_t, boolean_t)
+			return parseBinOp(items[i+1:], item_v, number_t, boolean_t, env)
 
 		case "and":
 			fallthrough
 		case "or":
-			return parseBinOp(items[i+1:], item_v, boolean_t, boolean_t)
+			return parseBinOp(items[i+1:], item_v, boolean_t, boolean_t, env)
 
 		case "not":
-			arg, err := Parse(items[i+1].(map[string]any))
+			arg, err := parse(items[i+1].(map[string]any), env)
 			if err != nil {
 				return nil, err
 			}
@@ -117,8 +208,12 @@ func Parse(json map[string]any) (ast_t, error) {
 
 func newLiteral(tipe string) (ast_t, error) {
 	switch tipe {
+	case "number":
+		fallthrough
 	case number_t:
 		return ast_num{}, nil
+	case "boolean":
+		fallthrough
 	case boolean_t:
 		return ast_bool{}, nil
 	default:
@@ -126,13 +221,11 @@ func newLiteral(tipe string) (ast_t, error) {
 	}
 }
 
-func parseObjLit(sexp []any) (ast_t, error) {
+func parseObjLit(sexp []any, env environ) (ast_t, error) {
 	fields := map[string]ast_t{}
 	for _, next := range sexp {
 		next := next.(map[string]any)
 		next_t := next["type"].(string)
-		// WARN: this should always be able to go to the end of the obj list
-		//			though what happens when an invalid field is passed in ??
 		if next_t != "list" {
 			break
 		}
@@ -150,8 +243,7 @@ func parseObjLit(sexp []any) (ast_t, error) {
 		ident_str := ident["value"].(string)
 
 		bound := field[1].(map[string]any)
-		bound_v, err := Parse(bound)
-		// bound_v, err := newLiteral(bound["type"].(string))
+		bound_v, err := parse(bound, env)
 		if err != nil {
 			return nil, err
 		}
@@ -166,8 +258,8 @@ func parseObjLit(sexp []any) (ast_t, error) {
 	return ast_obj{fields}, nil
 }
 
-func parseBinOp(sexp []any, op, arg_t, ret_t string) (ast_t, error) {
-	left, err := Parse(sexp[0].(map[string]any))
+func parseBinOp(sexp []any, op, arg_t, ret_t string, env environ) (ast_t, error) {
+	left, err := parse(sexp[0].(map[string]any), env)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +267,7 @@ func parseBinOp(sexp []any, op, arg_t, ret_t string) (ast_t, error) {
 		return nil, fmt.Errorf("`(%s [%s] %s)` used with type [%s]", op, arg_t, arg_t, left.Type())
 	}
 
-	right, err := Parse(sexp[1].(map[string]any))
+	right, err := parse(sexp[1].(map[string]any), env)
 	if err != nil {
 		return nil, err
 	}

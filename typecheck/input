@@ -1,1 +1,1 @@
-(fun (x : num) x)
+(let ([x 2] [y 3]) (object [x 10]))

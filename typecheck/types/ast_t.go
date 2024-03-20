@@ -14,8 +14,6 @@ const (
 	number_t  = "num"
 	boolean_t = "bool"
 	void_t    = "void"
-	object_t  = "object"   // ??
-	func_t    = "function" // ??
 )
 
 type ast_num struct{}
@@ -38,8 +36,14 @@ func (t ast_obj) Ast_t_f()  {}
 func (t ast_num) Type() string  { return number_t }
 func (t ast_bool) Type() string { return boolean_t }
 func (t ast_void) Type() string { return void_t }
-func (t ast_func) Type() string { return func_t }
-func (t ast_obj) Type() string  { return object_t }
+func (t ast_func) Type() string { return fmt.Sprintf("func|%s->%s|", t.Arg, t.Ret) }
+func (t ast_obj) Type() string {
+	s := make([]string, 0, len(t.Fields))
+	for k, v := range t.Fields {
+		s = append(s, fmt.Sprintf("%s:%s", k, v))
+	}
+	return fmt.Sprintf("obj{%s}", strings.Join(s, ","))
+}
 
 func (t ast_num) String() string {
 	return "(number)"

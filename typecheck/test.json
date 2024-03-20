@@ -1,1 +1,1 @@
-{"type":"list","value":[{"type":"symbol","value":"fun"},{"type":"list","value":[{"type":"symbol","value":"x"},{"type":"symbol","value":":"},{"type":"symbol","value":"num"}]},{"type":"symbol","value":"x"}]}
+{"type":"list","value":[{"type":"symbol","value":"let"},{"type":"list","value":[{"type":"list","value":[{"type":"symbol","value":"x"},{"type":"number","value":2}]},{"type":"list","value":[{"type":"symbol","value":"y"},{"type":"number","value":3}]}]},{"type":"list","value":[{"type":"symbol","value":"+"},{"type":"symbol","value":"x"},{"type":"symbol","value":"y"}]}]}
