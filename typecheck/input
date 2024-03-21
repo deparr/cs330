@@ -1,1 +1,1 @@
-(set! x 10)
+(if #true #true 10)

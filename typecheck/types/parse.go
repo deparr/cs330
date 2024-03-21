@@ -75,7 +75,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			ast_as_obj := obj.(ast_obj)
 			field_type, prs := ast_as_obj.Fields[ident_str]
 			if !prs {
-				return nil, fmt.Errorf("type `%s` has no field `%s`", ast_as_obj, ident_str)
+				return nil, fmt.Errorf("type '%s' has no field '%s'", ast_as_obj, ident_str)
 			}
 
 			return field_type, nil
@@ -111,7 +111,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			}
 
 			if !strings.Contains(fun.Type(), "func|") {
-				return nil, fmt.Errorf("`%s` type is not callable", fun.Type())
+				return nil, fmt.Errorf("'%s' type is not callable", fun.Type())
 			}
 
 			arg, err := parse(items[i+2].(map[string]any), env)
@@ -121,7 +121,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			fun_as_func := fun.(ast_func)
 
 			if arg.Type() != fun_as_func.Arg.Type() {
-				return nil, fmt.Errorf("function `%s` cannot accept arg of type: %s", fun, arg)
+				return nil, fmt.Errorf("function '%s' cannot accept arg of type: %s", fun, arg)
 			}
 
 			return fun_as_func.Ret, nil
@@ -197,7 +197,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			ident_str := ident["value"].(string)
 			old_type, prs := env[ident_str]
 			if !prs {
-				return nil, fmt.Errorf("Cannot set undefined var `%s`", ident_str)
+				return nil, fmt.Errorf("Cannot set undefined var '%s'", ident_str)
 			}
 			bound_val, err := parse(items[i+2].(map[string]any), env)
 			if err != nil {
@@ -209,6 +209,30 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			env[ident_str] = bound_val
 
 			return ast_void{}, nil
+
+		case "if":
+			cond, err := parse(items[i+1].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+			if cond.Type() != boolean_t {
+				return nil, fmt.Errorf("if condition must be of type (boolean)")
+			}
+
+			cons, err := parse(items[i+2].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+
+			altr, err := parse(items[i+3].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+			if altr.Type() != cons.Type() {
+				return nil, fmt.Errorf("expected (if [%s] [%s]), got (if [%s] [%s])", cons, cons, cons, altr)
+			}
+
+			return cons, nil
 
 		case "+":
 			fallthrough
@@ -235,7 +259,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 				return nil, err
 			}
 			if arg.Type() != boolean_t {
-				return nil, fmt.Errorf("`(%s [boolean])` used with type [%s]", item_v, arg.Type())
+				return nil, fmt.Errorf("'(%s [boolean])' used with type [%s]", item_v, arg.Type())
 			}
 
 			return newLiteral(boolean_t)
@@ -290,7 +314,7 @@ func parseObjLit(sexp []any, env environ) (ast_t, error) {
 		}
 
 		if _, prs := fields[ident_str]; prs {
-			return nil, fmt.Errorf("Object cannot have duplicate field `%s`", ident_str)
+			return nil, fmt.Errorf("Object cannot have duplicate field '%s'", ident_str)
 		}
 
 		fields[ident_str] = bound_v
@@ -305,7 +329,7 @@ func parseBinOp(sexp []any, op, arg_t, ret_t string, env environ) (ast_t, error)
 		return nil, err
 	}
 	if left.Type() != arg_t {
-		return nil, fmt.Errorf("`(%s [%s] %s)` used with type [%s]", op, arg_t, arg_t, left.Type())
+		return nil, fmt.Errorf("'(%s [%s] %s)' used with type [%s]", op, arg_t, arg_t, left.Type())
 	}
 
 	right, err := parse(sexp[1].(map[string]any), env)
@@ -313,7 +337,7 @@ func parseBinOp(sexp []any, op, arg_t, ret_t string, env environ) (ast_t, error)
 		return nil, err
 	}
 	if right.Type() != arg_t {
-		return nil, fmt.Errorf("`(%s %s [%s])` used with type [%s]", op, arg_t, arg_t, right.Type())
+		return nil, fmt.Errorf("'(%s %s [%s])' used with type [%s]", op, arg_t, arg_t, right.Type())
 	}
 
 	return newLiteral(ret_t)
