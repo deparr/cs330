@@ -25,8 +25,8 @@ func main() {
 
 	_type, err := types.Parse(astMap)
 	if err != nil {
-		fmt.Printf("(error \"%s |> banana\")\n", err.Error())
-		os.Exit(1)
+		fmt.Printf("(error \"%s (banana)\")\n", err.Error())
+		return
 	}
 
 	fmt.Printf("(type %s)\n",  _type)
