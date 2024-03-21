@@ -20,7 +20,12 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 	if item_t != "list" && item_t != "symbol" {
 		return newLiteral(item_t)
 	} else if item_t == "symbol" {
-		return env[json["value"].(string)], nil
+		ident := json["value"].(string)
+		_type, bound := env[ident]
+		if !bound {
+			return nil, fmt.Errorf("Cannot access undefined ident %s", ident)
+		}
+		return _type, nil
 	}
 
 	var (
@@ -34,7 +39,7 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 	for i < len(items) {
 		item := items[i].(map[string]any)
 		item_t = item["type"].(string)
-		fmt.Printf("%d %v\n", i, item)
+		// fmt.Printf("%d %v\n", i, item)
 		// if type is not list ??
 		// what to do here?
 		// can't switch on value because that can be any type
@@ -168,6 +173,42 @@ func parse(json map[string]any, env environ) (ast_t, error) {
 			}
 
 			return body_t, nil
+
+		case "begin":
+			expr_l := items[i+1:]
+			var type_res ast_t
+			var err error
+			for _, expr := range expr_l {
+				expr := expr.(map[string]any)
+				type_res, err = parse(expr, env)
+				if err != nil {
+					return nil, err
+				}
+
+			}
+
+			return type_res, nil
+
+		case "set!":
+			ident := items[i+1].(map[string]any)
+			if ident["type"].(string) != "symbol" {
+				return nil, fmt.Errorf("Non-symbol given as ident in set expr")
+			}
+			ident_str := ident["value"].(string)
+			old_type, prs := env[ident_str]
+			if !prs {
+				return nil, fmt.Errorf("Cannot set undefined var `%s`", ident_str)
+			}
+			bound_val, err := parse(items[i+2].(map[string]any), env)
+			if err != nil {
+				return nil, err
+			}
+			if bound_val.Type() != old_type.Type() {
+				return nil, fmt.Errorf("Cannot set %s, type %s to %s", ident_str, old_type, bound_val)
+			}
+			env[ident_str] = bound_val
+
+			return ast_void{}, nil
 
 		case "+":
 			fallthrough

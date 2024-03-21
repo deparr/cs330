@@ -53,6 +53,10 @@ func (t ast_bool) String() string {
 	return "(boolean)"
 }
 
+func (t ast_void) String() string {
+	return "(void)"
+}
+
 func (t ast_func) String() string {
 	return fmt.Sprintf("(-> %s %s)", t.Arg, t.Ret)
 }
