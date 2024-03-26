@@ -26,7 +26,6 @@ function coroutine_wrap(f) {
 }
 
 /**
- * Eats my balls
  * @param {Promise<co>} co coroutine promise
  * @returns {Promise<co>} 
  *
