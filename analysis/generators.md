@@ -1,8 +1,56 @@
 # Generators
 ### David Parrott - dmparr22
 ---
+## Part 1: Language Comparison
+Python3:
+```py
+x = 0
 
-## Program 1
+def a(b):
+    global x
+    b()
+    x = 3
+
+def c():
+    a(lambda: (yield 1))
+    yield x
+
+gen = c()
+print(next(gen))
+print(next(gen))
+```
+
+Racket:
+```racket
+#lang racket
+(require racket/generator)
+
+(define x 0)
+(define (a b)
+  (b)
+  (set! x 3))
+
+(define c
+  (generator ()
+    (a (lambda () (yield 1)))
+    (yield x)))
+
+(c)
+(c)
+```
+
+> todo: this is questionable:
+
+These are not equivalent because python generators keep track of their own state
+(I think we said that Racket's are the ones that do this is class, but I think I'm confused because it makes much more sense for python's to do this).
+Calling `b` in the python code does not yield `1`, instead it creates a separate generator object independent of the one bound to `g`.
+If the call to `b` were to be replaced with `next(b())`, *it would yield `1`*, but not to the top level (`print(next(gen))`), only to `a`.
+
+
+
+---
+## Part 2: Implementation State
+### Program 1
 ```py
 def gen(x):
     yield x
@@ -14,16 +62,17 @@ next(g) + pause() + next(g)
 Top-level Environment:
 ```
 PC:
-0 + pause() + next(g)
+0 + • + next(g)
 
 Binds:
 g => @generator#gen
 ```
 
-Generator Environment
+Generator Environment:
 ```
 PC:
-yield x + 1 
+yield x
+yield x + 1 <-- 
 
 Binds:
 x => 0
@@ -31,18 +80,39 @@ x => 0
 
 ---
 
-## Program 2
+### Program 2
 ```py
-while True:
-    yield x
-    x += 1
+def gen(x):
+    while True:
+        yield x
+        x += 1
 g = gen(0)
 next(g) + next(g) + pause()
 ```
 
+Top-level Environment:
+```
+PC:
+0 + 1 + •
+
+Binds:
+g => @generator#gen
+```
+
+Generator Environment:
+```
+PC:
+while True:
+    yield x <-- 
+    x += 1
+
+Binds:
+x => 2
+```
+
 ---
 
-## Program 3
+### Program 3
 ```py
 def gen(x):
     yield (yield x)
@@ -54,7 +124,46 @@ next(g)
 pause()
 ```
 
-First pause:  
+#### First pause:  
+Top-level Environment:
+```
+PC:
+0
+•
+next(g)
+pause()
 
-Second pause:  
 
+Binds:
+g => @generator#gen
+```
+
+Generator Environment:
+```
+PC:
+yield None <-- 
+
+Binds:
+x => 0
+```
+
+#### Second pause:  
+Top-level Environment:
+```
+PC:
+0
+0
+None
+•
+
+Binds:
+g => @generator#gen
+```
+
+Generator Environment:
+```
+PC:
+<nil>
+
+Binds:
+```
