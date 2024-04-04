@@ -42,8 +42,9 @@ Racket:
 These are not equivalent because python generators keep track of their own state.
 
 I'm pretty sure we said that Racket's are the ones that do this is class, but I think I'm confused because it makes much more sense to me for python's to do this.
-Calling `b` in the python code does not yield `1`, instead it creates a separate generator object independent of the one bound to `g`.
-If the call to `b` were to be replaced with `next(b())`, *it would yield `1`*, but not to the top level (`print(next(gen))`), only to `a`.
+Calling `b` in the python code does not yield `1`, instead it creates a separate generator object independent of the one bound to `gen`.
+This makes them similar to closures in that they capture an environment, but closures are just plain functions, they cannot be run like a coroutine.
+If the call to `b` were to be replaced with `next(b())`, *it would yield `1`*, but not to the top level generator `gen`, only to a local value in `a`.
 
 In contrast, `yield` in Racket is a (seemingly) normal function that is able to walk the callstack or otherwise know that it is being called in the context of a generator.
 This allows the call to `b` to yield `1` to the generator `c` at the top level. 
