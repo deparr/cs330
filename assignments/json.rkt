@@ -3,6 +3,8 @@
          "json-util.rkt")
 (print-only-errors #t)
 
+; David Parrott - dmparr22
+
 (define-type JSON
   (JSON-null)
   (JSON-number [number  : Number])
@@ -13,23 +15,51 @@
 (define json-numberp
   (bind1 (λ (n) (unitp (JSON-number n)))
          numberp))
+
 (define json-stringp
   (bind1 (λ (n) (unitp (JSON-string n)))
          stringp))
+
 (define json-nullp
   (bind1 (λ (_) (unitp (JSON-null)))
          (literalp "null")))
 
+(define json-arrayp
+  (bind1 (λ (l) (unitp (JSON-array l)))
+         (delimitedp (literalp "[") (literalp "]") (literalp ",")
+                     (delayp json-valuep))))
+
+(define json-obj-fieldp
+  (bind1 (λ (field)
+           (bind1 (λ (val) (unitp (values field val)))
+                  (beginp
+                    (sp (literalp ":"))
+                    (sp (delayp json-valuep)))))
+         (sp stringp)))
+
+(define json-objp
+  (fmap1 (λ (l) (JSON-object (hash l)))
+         (delimitedp (literalp "{") (literalp "}") (literalp ",")
+                     json-obj-fieldp)))
+
+(define json-valuep
+  (altp (list json-numberp
+              json-stringp
+              json-nullp
+              json-arrayp
+              json-objp)))
+
+#|
+‹JSON› ::= null
+  |  ‹number›
+  |  ‹string›
+  |  [ [‹JSON›{, ‹JSON›}*] ]
+  |  { [‹string›:‹JSON›{, ‹string› : ‹JSON›}*] }
+|#
 (JSONp : (Parser JSON 'b))
 (define JSONp
-  (altp (list (bind1 (λ (l) (unitp (JSON-array l)))
-                     (delimitedp (literalp "[")
-                                 (literalp "]")
-                                 (literalp ",")
-                                 (altp (list (literalp "null")
-                                             numberp
-                                             stringp))))
-              (delimitedp (literalp "{") (literalp "}") (literalp ",") (unitp 'balls)))))
+  (sp (bind1 (λ (j) (sp (unitp j)))
+             json-valuep)))
 
 (test (parse JSONp #<<JSON
 []
