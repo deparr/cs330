@@ -16,15 +16,6 @@
 (define (seq start)
   (cons start (seq (add1 start))))
 
-(define (take-n l n)
-  (type-case (Listof 'a) l
-    [empty
-     empty]
-	[(cons v rls)
-	 (if (> n 0)
-	 (cons v (take-n rls (- n 1)))
-	 empty)]))
-
 ;; (build-infinite-list f) → (Listof 'a)
 ;;	f : (Number -> 'a)
 (define (build-infinite-list f)
@@ -32,47 +23,27 @@
 
 ;; nats : (Listof Number)
 (define nats
-  (build-infinite-list (lambda (n) n)))
-
-(define (all pred l)
-  (type-case (Listof 'a) l
-    [empty
-     #t]
-    [(cons v rls)
-     (and (pred v) (all pred rls))]))
+  (build-infinite-list (λ (n) n)))
 
 ;; (prime? n) → Boolean
 ;;	n : Number
-#;
 (define (prime? n)
-  (all (lambda (d) (> (remainder n d) 0))
-       (take-while (lambda (d) (< (* d d) n))
-                   (rest (rest nats)))))
-(define (prime? n)
-  (foldl (lambda (d a) (and a (> (remainder n d) 0))) #t
-         (take-while (lambda (d) (< (* d d) n))
+  (foldl (λ (d a) (and a (> (remainder n d) 0))) #t
+         (take-while (λ (d) (< (* d d) n))
                      (rest (rest nats)))))
 
 ;; primes : (Listof Number)
 (define primes
   (filter prime? (rest (rest nats))))
 
-(list-ref primes 1000)
-
 ;; (prime?/fast n) → Boolean
 ;;	n : Number
 (define (prime?/fast n)
-  (foldl (lambda (d a) (and a (> (remainder n d) 0))) #t
-         (take-n primes/fast n)))
-#;
-(define (prime?/fast n)
-  (foldl (lambda (d a) (and a (> (remainder n d) 0))) #t
-         (take-while (lambda (d) (< (* 2 d) n))
+  (foldl (λ (d a) (and a (> (remainder n d) 0))) #t
+         (take-while (λ (d) (< (* 2 d) n))
                      primes/fast)))
 
 ;; primes/fast : (Listof Number)
 (define primes/fast
-  (filter prime?/fast (rest (rest nats))))
-
-(list-ref primes/fast 0)
+  (filter prime?/fast (cons 2 (rest (rest (rest nats))))))
 
