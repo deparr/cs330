@@ -29,7 +29,7 @@
 ;;	n : Number
 (define (prime? n)
   (foldl (λ (d a) (and a (> (remainder n d) 0))) #t
-         (take-while (λ (d) (< (* d d) n))
+         (take-while (λ (d) (<= (* d d) n))
                      (rest (rest nats)))))
 
 ;; primes : (Listof Number)
@@ -40,10 +40,9 @@
 ;;	n : Number
 (define (prime?/fast n)
   (foldl (λ (d a) (and a (> (remainder n d) 0))) #t
-         (take-while (λ (d) (< (* 2 d) n))
-                     primes/fast)))
+         (take-while (λ (d) (< (* 2 d) n)) primes/fast)))
 
 ;; primes/fast : (Listof Number)
 (define primes/fast
-  (filter prime?/fast (cons 2 (rest (rest (rest nats))))))
+  (cons 2 (filter prime?/fast (rest (rest (rest nats))))))
 
